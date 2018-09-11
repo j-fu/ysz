@@ -10,11 +10,11 @@ if !isinteractive()
 end
 
 
-mutable struct ILiqParameters <:FVMParameters
+mutable struct YSZParameters <:FVMParameters
     number_of_species::Int64
     eps::Float64 
     a::Float64
-    function ILiqParameters()
+    function YSZParameters()
         new(2,1.0e-4,0)
     end
 end
@@ -23,14 +23,14 @@ const iphi=1
 const ic=2
 const beps=1.0e-4
 
-function run_iliq(;n=100,pyplot=false)
+function run_ysz(;n=100,pyplot=false)
 
     h=1.0/convert(Float64,n)
     geom=FVMGraph(collect(0:h:1))
     
-    parameters=ILiqParameters()
+    parameters=YSZParameters()
     
-    function flux!(this::ILiqParameters,f,uk,ul)
+    function flux!(this::YSZParameters,f,uk,ul)
         f[iphi]=this.eps*(uk[iphi]-ul[iphi])
         muk=-log(1-uk[ic])
         mul=-log(1-ul[ic])
@@ -39,7 +39,7 @@ function run_iliq(;n=100,pyplot=false)
     end 
 
 
-    function classflux!(this::ILiqParameters,f,uk,ul)
+    function classflux!(this::YSZParameters,f,uk,ul)
         f[iphi]=this.eps*(uk[iphi]-ul[iphi])
         arg=uk[iphi]-ul[iphi]
         bp,bm=fbernoulli_pm(uk[iphi]-ul[iphi])
@@ -101,6 +101,6 @@ end
 
 
 if !isinteractive()
-    @time run_iliq(n=100,pyplot=true)
+    @time run_ysz(n=100,pyplot=true)
     waitforbuttonpress()
 end
