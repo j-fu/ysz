@@ -34,7 +34,8 @@ function run_ysz(;n=100,pyplot=false)
         f[iphi]=this.eps*(uk[iphi]-ul[iphi])
         muk=-log(1-uk[ic])
         mul=-log(1-ul[ic])
-        bp,bm=fbernoulli_pm(2*(uk[iphi]-ul[iphi])+(muk-mul))
+#        bp,bm=fbernoulli_pm(2*(uk[iphi]-ul[iphi])+(muk-mul))
+        bp,bm=fbernoulli_pm((ul[iphi]-uk[iphi])*(1.0 + uk[ic]+ul[ic])+(muk-mul))
         f[ic]=bm*uk[ic]-bp*ul[ic]
     end 
 
