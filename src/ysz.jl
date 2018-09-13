@@ -76,13 +76,16 @@ function run_ysz(;n=100,pyplot=false )
         mul=-log(1-ul[ic])
 #        bp,bm=fbernoulli_pm(2*(uk[iphi]-ul[iphi])+(muk-mul))
         bp,bm=fbernoulli_pm(
-                  (
-                   ul[iphi]-uk[iphi]
-                  )*(
-                     1.0 + uk[ic]+ul[ic]
-                    )
-                  +2.0*(muk-mul))
-        f[ic]=bm*uk[ic]-bp*ul[ic]
+				1.0/this.ML/kB*(
+           -zA*e0/this.T*(
+            ul[iphi]-uk[iphi]
+           )*(
+				 		 1.0 + 0.5*(uk[ic]+ul[ic])
+             )
+					 +kB*(mO*(1-this.nu) + this.ML)*(muk-mul)
+				)*mO/this.DD/kB)
+							
+				f[ic]=this.DD*kB/mO*(bm*uk[ic]-bp*ul[ic])
     end 
 
 
