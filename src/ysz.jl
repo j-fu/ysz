@@ -47,6 +47,14 @@ function setDependentYSZ(this::YSZParameters)
 	end
 end
 
+function printCoefficients(this::YSZParameters)
+	print(
+				"epsilon		:",	eps0*(1+this.chi),"\n",
+				"phi coef		:",1.0/this.ML/kB*(-zA*e0/this.T*this.ML*mO/this.DD/kB/this.vL*m_par*(1.0-this.nu))*mO,"\n",
+				"y coef			:",1.0/this.ML/kB*kB*(mO*(1-this.nu) + this.ML)*mO/this.DD/kB/this.vL*m_par*(1.0-this.nu)*mO,"\n",
+				)
+end
+
 const e0   = 1.602176565e-19   #  [C]
 const eps0 = 8.85418781762e-12 #  [As/(Vm)] 
 const kB   = 1.3806488e-23     #  [J/K]  
@@ -70,6 +78,7 @@ function run_ysz(;n=100,pyplot=false )
     
     parameters=YSZParameters()
 		setDependentYSZ(parameters)
+		printCoefficients(parameters)
     function flux!(this::YSZParameters,f,uk,ul)
 				f[iphi]=eps0*(1+this.chi)*(uk[iphi]-ul[iphi])
         muk=-log(1-uk[ic])
@@ -80,12 +89,13 @@ function run_ysz(;n=100,pyplot=false )
            -zA*e0/this.T*(
             ul[iphi]-uk[iphi]
            )*(
-				 		 1.0 + 0.5*(uk[ic]+ul[ic])
+							this.ML + mO*m_par*(1-.0*this.nu)*0.5*(uk[ic]+ul[ic])
              )
-					 +kB*(mO*(1-this.nu) + this.ML)*(muk-mul)
-				)*mO/this.DD/kB)
-							
-				f[ic]=this.DD*kB/mO*(bm*uk[ic]-bp*ul[ic])
+					 +kB*(mO*(1-m_par*this.nu) + this.ML)*(muk-mul)
+					 )*mO/this.DD/kB/this.vL*m_par*(1.0-this.nu)*mO
+				)
+				#print(bm,"		", bp)
+				f[ic]=this.DD*kB/mO*(bm*uk[ic]-bp*ul[ic])*this.vL/m_par/(1.0-this.nu)/mO
     end 
 
 
@@ -102,8 +112,8 @@ function run_ysz(;n=100,pyplot=false )
     end
     
     function reaction!(this::FVMParameters, f,u)
-			f[iphi]=e0*(zA*u[ic]*m_par*(1-this.nu) + this.zL)/this.vL
-        f[ic]=0
+			f[iphi]=e0/this.vL*(zA*u[ic]*m_par*(1-this.nu) + this.zL)
+      f[ic]=0
     end
     
     
@@ -112,8 +122,8 @@ function run_ysz(;n=100,pyplot=false )
                               flux=flux!, 
                               reaction=reaction!
                               )
-    sys.boundary_values[iphi,1]=1
-    sys.boundary_values[iphi,2]=0.0
+    sys.boundary_values[iphi,1]=1.0e-1
+    sys.boundary_values[iphi,2]=0.0e-3
     
     sys.boundary_factors[iphi,1]=Dirichlet
     sys.boundary_factors[iphi,2]=Dirichlet
@@ -123,7 +133,7 @@ function run_ysz(;n=100,pyplot=false )
     
     inival=unknowns(sys)
     for inode=1:size(inival,2)
-        inival[iphi,inode]=0
+        inival[iphi,inode]=0.0e-3
         inival[ic,inode]=parameters.y0
     end
     #parameters.eps=1.0e-2
