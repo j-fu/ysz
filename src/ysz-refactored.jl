@@ -36,10 +36,10 @@ function YSZParameters(this)
     this.number_of_species=2
     this.chi=1.e1
     this.T=1073
-    this.x_frac=0.1
+    this.x_frac=0.2
     this.vL=3.35e-29
-    this.nu=0.1
-    this.DD=1.0e-9
+    this.nu=0.4
+    this.DD=1.0e-13
     this.e0   = 1.602176565e-19  #  [C]
     this.eps0 = 8.85418781762e-12 #  [As/(Vm)] 
     this.kB   = 1.3806488e-23  #  [J/K]  
@@ -74,7 +74,7 @@ const iphi=1
 const iy=2
 
 
-function run_ysz(;n=100,pyplot=false,flux=1, width=1.0)
+function run_ysz(;n=1000,pyplot=false,flux=4, storage=2, width=1.0e-9)
 
     h=width/convert(Float64,n)
     geom=FVMGraph(collect(0:h:width))
@@ -95,34 +95,52 @@ function run_ysz(;n=100,pyplot=false,flux=1, width=1.0)
         f[iphi]=this.eps0*(1+this.chi)*(uk[iphi]-ul[iphi])
         muk=-log(1-uk[iy])
         mul=-log(1-ul[iy])
-        bp,bm=fbernoulli_pm(2*(1.0+0.5*(uk[iy]+ul[iy]))*(uk[iphi]-ul[iphi])+(muk-mul))
+        bp,bm=fbernoulli_pm(-2*(1.0+0.5*(uk[iy]+ul[iy]))*(uk[iphi]-ul[iphi])+(muk-mul))
         f[iy]=bm*uk[iy]-bp*ul[iy]
     end
-
+		
+		function flux4!(this::YSZParameters,f,uk,ul)
+        f[iphi]=-this.eps0*(1+this.chi)*(uk[iphi]-ul[iphi])
+        muk=log(1-uk[iy])
+        mul=log(1-ul[iy])
+        bp,bm=fbernoulli_pm(
+           -1.0*(ul[iphi]-uk[iphi])*this.zA*this.e0/this.T/this.kB*(
+							1.0 + this.mO/this.ML*this.m_par*(1.0-this.nu)*0.5*(uk[iy]+ul[iy])
+            )
+					+(mul-muk)*(
+								 1.0 +this.mO*(1-this.m_par*this.nu)/this.ML
+						)
+      	)
+        f[iy]=this.DD*this.kB/this.mO*(bm*uk[iy]-bp*ul[iy])
+    end 
     
     function flux3!(this::YSZParameters,f,uk,ul)
         f[iphi]=this.eps0*(1+this.chi)*(uk[iphi]-ul[iphi])
         muk=-log(1-uk[iy])
         mul=-log(1-ul[iy])
         bp,bm=fbernoulli_pm(
-            1.0/this.ML/this.kB*(-this.zA*this.e0/this.T*(ul[iphi]-uk[iphi])*(
+            -1.0/this.ML/this.kB*(-this.zA*this.e0/this.T*(ul[iphi]-uk[iphi])*(
        this.ML + this.mO*this.m_par*(1-.0*this.nu)*0.5*(uk[iy]+ul[iy])
              )
       +this.kB*(this.mO*(1-this.m_par*this.nu) + this.ML)*(muk-mul)
       )*this.mO/this.DD/this.kB/this.vL*this.m_par*(1.0-this.nu)*this.mO
     )
-        #print(bm,"  ", bp)
-        f[iy]=this.DD*this.kB/this.mO*(bm*uk[iy]-bp*ul[iy])*this.vL/this.m_par/(1.0-this.nu)/this.mO
+        f[iy]=this.DD*this.kB/this.mO*(bm*uk[iy]-bp*ul[iy])*this.vL/this.m_par/(1.0-this.nu)/this.mO/h
     end 
 
-
-
-    function storage!(this::FVMParameters, f,u)
+    function storage1!(this::FVMParameters, f,u)
         f[iphi]=0
-        f[iy]=u[iy]
+				f[iy]=u[iy]
+		end
+
+
+    function storage2!(this::FVMParameters, f,u)
+        f[iphi]=0
+				f[iy]=this.mO*this.m_par*(1.0-this.nu)*u[iy]/this.vL
     end
 
     function reaction!(this::FVMParameters, f,u)
+        #f[iphi]=(this.e0/this.vL)*(this.zA*u[iy]*this.m_par*(1-this.nu) + this.zL)
         f[iphi]=(this.e0/this.vL)*(this.zA*u[iy]*this.m_par*(1-this.nu) + this.zL)
         f[iy]=0
     end
@@ -133,14 +151,22 @@ function run_ysz(;n=100,pyplot=false,flux=1, width=1.0)
         fluxx=flux2!
     elseif flux==3 
         fluxx=flux3!
+    elseif flux==4 
+        fluxx=flux4!
     end
 
+		if storage==1 
+        storagex=storage1!
+    elseif storage==2
+        storagex=storage2!
+		end
+
     sys=TwoPointFluxFVMSystem(geom,parameters=parameters, 
-                              storage=storage!, 
+                              storage=storagex, 
                               flux=fluxx, 
                               reaction=reaction!
                               )
-    sys.boundary_values[iphi,1]=1.0
+    sys.boundary_values[iphi,1]=5.0e-1
     sys.boundary_values[iphi,2]=0.0e-3
     
     sys.boundary_factors[iphi,1]=Dirichlet
@@ -152,8 +178,8 @@ function run_ysz(;n=100,pyplot=false,flux=1, width=1.0)
     inival=unknowns(sys)
     for inode=1:size(inival,2)
         inival[iphi,inode]=0.0e-3
-        inival[iy,inode]=parameters.y0
-    end
+        inival[iy,inode]= parameters.y0
+		end
     #parameters.eps=1.0e-2
     #parameters.a=5
     control=FVMNewtonControl()
