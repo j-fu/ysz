@@ -100,7 +100,7 @@ function run_ysz(;n=1000,pyplot=false,flux=4, storage=2, width=1.0e-9)
     end
 		
 		function flux4!(this::YSZParameters,f,uk,ul)
-        f[iphi]=-this.eps0*(1+this.chi)*(uk[iphi]-ul[iphi])
+        f[iphi]=this.eps0*(1+this.chi)*(uk[iphi]-ul[iphi])
         muk=log(1-uk[iy])
         mul=log(1-ul[iy])
         bp,bm=fbernoulli_pm(
@@ -141,7 +141,7 @@ function run_ysz(;n=1000,pyplot=false,flux=4, storage=2, width=1.0e-9)
 
     function reaction!(this::FVMParameters, f,u)
         #f[iphi]=(this.e0/this.vL)*(this.zA*u[iy]*this.m_par*(1-this.nu) + this.zL)
-        f[iphi]=(this.e0/this.vL)*(this.zA*u[iy]*this.m_par*(1-this.nu) + this.zL)
+        f[iphi]=-(this.e0/this.vL)*(this.zA*u[iy]*this.m_par*(1-this.nu) + this.zL)
         f[iy]=0
     end
 
@@ -184,6 +184,8 @@ function run_ysz(;n=1000,pyplot=false,flux=4, storage=2, width=1.0e-9)
     #parameters.a=5
     control=FVMNewtonControl()
     control.verbose=true
+    control.damp=0.01
+    control.damp_growth=2
     t=0.0
     tend=1.0
     tstep=1.0e-10
