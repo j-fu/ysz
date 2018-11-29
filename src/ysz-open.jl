@@ -14,6 +14,7 @@ mutable struct YSZParameters <:TwoPointFluxFVM.Physics
     x_frac::Float64 # Y2O3 mol mixing, x [%] 
     vL::Float64     # volume of one FCC cell, v_L [m^3]
     nu::Float64    # ratio of immobile ions, \nu [1]
+    nus::Float64    # ratio of immobile ions on surface, \nu [1]
     ML::Float64   # averaged molar mass [kg]
     zL::Float64   # average charge number [1]
     DD::Float64   # diffusion coefficient [m^2/s]
@@ -47,12 +48,13 @@ function YSZParameters(this)
     this.x_frac=0.2
     this.vL=3.35e-29
     this.areaL=(this.vL)^0.6666
-    this.nu=0.4
-    this.DD=1.0e-13
-    this.DDs=1.#e-3   
-    this.dPsi=-1.0e-19
-    this.dPsiR=1.0#e5
-    this.R0=1.0e0
+    this.nu=0.8
+    this.nus=0.99
+    this.DD=1.0e-15
+    this.DDs=1-3#.e3   
+    this.dPsi=-1.0e5
+    this.dPsiR=-1.0
+    this.R0=1.0e-3
     this.pO=1.0
     #
     this.e0   = 1.602176565e-19  #  [C]
@@ -88,8 +90,92 @@ end
 const iphi=1
 const iy=2
 
+function flux!(this::YSZParameters,f,uk,ul)
+    f[iphi]=this.eps0*(1+this.chi)*(uk[iphi]-ul[iphi])
+    muk=log(1-uk[iy])
+    mul=log(1-ul[iy])
+    bp,bm=fbernoulli_pm(
+        -1.0*(ul[iphi]-uk[iphi])*this.zA*this.e0/this.T/this.kB*(
+1.0 + this.mO/this.ML*this.m_par*(1.0-this.nu)*0.5*(uk[iy]+ul[iy])
+        )
+  +(mul-muk)*(
+1.0 +this.mO*(1-this.m_par*this.nu)/this.ML
+  )
+  	)
+    f[iy]=(1+this.mO*this.m_par*(1.0-this.nu)*0.5*(uk[iy]+ul[iy])/this.ML)*this.DD*this.kB/this.mO*(bm*uk[iy]-bp*ul[iy]) # prefactor checked
+end 
 
-function run_ysz(;n=10, verbose=true,pyplot=false,flux=4, storage=2, xbreaction=2 ,width=1.0e-9)
+function storage!(this::YSZParameters, f,u)
+    f[iphi]=0
+    f[iy]=this.mO*this.m_par*(1.0-this.nu)*u[iy]/this.vL
+end
+
+function reaction!(this::YSZParameters, f,u)
+    # source term for the Poisson equation, beware of the sign
+    f[iphi]=-(this.e0/this.vL)*(this.zA*u[iy]*this.m_par*(1-this.nu) + this.zL)
+    f[iy]=0
+end
+
+function electroreaction(this::YSZParameters, bu)
+    if this.R0 > 0
+      eR = this.R0*((exp(this.dPsiR)*(bu[1]/(1-bu[1]))^0.5*(this.pO)^-0.25 ) - exp(-this.dPsiR)*((bu[1]/(1-bu[1]))^-0.5*(this.pO)^0.25))
+      #eR = this.R0/this.e0*this.mO*sinh(this.dPsiR/this.T/this.kB + 0.5*log(bu[1]) - 0.5*log(1-bu[1]) - 0.25*log(this.pO))
+      #eR = 1e-0*((exp(1)*(bu[1]/(1-bu[1]))^0.5*(this.pO)^-0.25 ) - exp(-1)*((bu[1]/(1-bu[1]))^-0.5*(this.pO)^0.25))
+    else
+        eR=0
+    end
+end
+
+function breaction!(this::YSZParameters,f,bf,u,bu)
+    if  this.bregion==1
+        electroR=electroreaction(this,bu)
+        f[iy]= this.DDs*(
+                        this.dPsi + this.kB*this.T/this.mO*(
+                          log(u[iy]*(1-bu[1])) - log(bu[1]*(1-u[iy]))
+                        )
+              )
+        # if bulk chem. pot. > surf. ch.p. then positive flux from bulk to surf
+        # sign is negative bcs of the equation implementation
+        bf[1]= electroR-this.DDs*( # adsorption term
+                        this.dPsi + this.kB*this.T/this.mO*(
+                          log(u[iy]*(1-bu[1])) - log(bu[1]*(1-u[iy]))
+                        )
+              ) 
+        f[iphi]=0
+    else
+        f[iy]=0        
+        f[iphi]=0
+    end
+end
+
+function breaction2!(this::YSZParameters,f,bf,u,bu)
+  if  this.bregion==1
+      f[iy]=(u[iy]-bu[1])
+      bf[1]=(bu[1]-u[iy])
+  else
+      f[1]=0        
+      f[2]=0
+  end
+end
+
+function bstorage!(this::YSZParameters,bf,bu)
+    if  this.bregion==1
+        bf[1]=this.mO*this.ms_par*(1.0-this.nu)/this.areaL*bu[1]
+    else
+        bf[1]=0        
+    end
+end
+# function flux1!(this::YSZParameters,f,uk,ul)
+#     f[iphi]=this.eps0*(1+this.chi)*(uk[iphi]-ul[iphi])
+#     muk=-log(1-uk[iy])
+#     mul=-log(1-ul[iy])
+#     bp,bm=fbernoulli_pm(2*(uk[iphi]-ul[iphi])+(muk-mul))
+#     f[iy]=bm*uk[iy]-bp*ul[iy]
+# end
+
+
+
+function run_open(;n=15, verbose=false ,pyplot=false, width=1.0e-9, voltametry=true,voltrate=1, bound=2, sample=300)
 
     h=width/convert(Float64,n)
     X=collect(0.0:h:width)
@@ -98,157 +184,11 @@ function run_ysz(;n=10, verbose=true,pyplot=false,flux=4, storage=2, xbreaction=
     
     parameters=YSZParameters()
 
-    # function flux1!(this::YSZParameters,f,uk,ul)
-    #     f[iphi]=this.eps0*(1+this.chi)*(uk[iphi]-ul[iphi])
-    #     muk=-log(1-uk[iy])
-    #     mul=-log(1-ul[iy])
-    #     bp,bm=fbernoulli_pm(2*(uk[iphi]-ul[iphi])+(muk-mul))
-    #     f[iy]=bm*uk[iy]-bp*ul[iy]
-    # end
 
-    # function flux2!(this::YSZParameters,f,uk,ul)
-    #     f[iphi]=this.eps0*(1+this.chi)*(uk[iphi]-ul[iphi])
-    #     muk=-log(1-uk[iy])
-    #     mul=-log(1-ul[iy])
-    #     bp,bm=fbernoulli_pm(-2*(1.0+0.5*(uk[iy]+ul[iy]))*(uk[iphi]-ul[iphi])+(muk-mul))
-    #     f[iy]=bm*uk[iy]-bp*ul[iy]
-    # end
-    # 
-    function flux4!(this::YSZParameters,f,uk,ul)
-        f[iphi]=this.eps0*(1+this.chi)*(uk[iphi]-ul[iphi])
-        muk=log(1-uk[iy])
-        mul=log(1-ul[iy])
-        bp,bm=fbernoulli_pm(
-            -1.0*(ul[iphi]-uk[iphi])*this.zA*this.e0/this.T/this.kB*(
-		1.0 + this.mO/this.ML*this.m_par*(1.0-this.nu)*0.5*(uk[iy]+ul[iy])
-            )
-	    +(mul-muk)*(
-		1.0 +this.mO*(1-this.m_par*this.nu)/this.ML
-	    )
-      	)
-        f[iy]=(1+this.mO*this.m_par*(1.0-this.nu)*0.5*(uk[iy]+ul[iy])/this.ML)*this.DD*this.kB/this.mO*(bm*uk[iy]-bp*ul[iy]) # prefactor checked
-    end 
-    
-    # function flux3!(this::YSZParameters,f,uk,ul)
-    #     f[iphi]=this.eps0*(1+this.chi)*(uk[iphi]-ul[iphi])
-    #     muk=-log(1-uk[iy])
-    #     mul=-log(1-ul[iy])
-    #     bp,bm=fbernoulli_pm(
-    #         -1.0/this.ML/this.kB*(-this.zA*this.e0/this.T*(ul[iphi]-uk[iphi])*(
-    #             this.ML + this.mO*this.m_par*(1-.0*this.nu)*0.5*(uk[iy]+ul[iy])
-    #         )
-    #                               +this.kB*(this.mO*(1-this.m_par*this.nu) + this.ML)*(muk-mul)
-    #                               )*this.mO/this.DD/this.kB/this.vL*this.m_par*(1.0-this.nu)*this.mO
-    #     )
-    #     f[iy]=(1+this.mO*this.m_par*(1.0-this.nu)*0.5*(uk[iy]+ul[iy])/this.ML)*this.DD*this.kB/this.mO*(bm*uk[iy]-bp*ul[iy])*this.vL/this.m_par/(1.0-this.nu)/this.mO/h
-    # end 
-
-    # function storage1!(this::YSZParameters, f,u)
-    #     f[iphi]=0
-	  #     f[iy]=u[iy]
-    # end
-
-
-    function storage2!(this::YSZParameters, f,u)
-        f[iphi]=0
-        f[iy]=this.mO*this.m_par*(1.0-this.nu)*u[iy]/this.vL
-    end
-
-    function reaction!(this::YSZParameters, f,u)
-        #f[iphi]=(this.e0/this.vL)*(this.zA*u[iy]*this.m_par*(1-this.nu) + this.zL)
-        f[iphi]=-(this.e0/this.vL)*(this.zA*u[iy]*this.m_par*(1-this.nu) + this.zL)
-        f[iy]=0
-    end
-    
-    function breaction1!(this::YSZParameters,f,bf,u,bu)
-        if  this.bregion==1
-            #electroR = this.R0/this.e0*this.mO*sinh(this.dPsiR/this.T/this.kB + 0.5*log(bu[1]) - 0.5*log(1-bu[1]) - 0.25*log(this.pO))
-            electroR = 1e-0*((exp(this.dPsiR)*(bu[1]/(1-bu[1]))^0.5*(this.pO)^-0.25 ) - exp(-this.dPsiR)*((bu[1]/(1-bu[1]))^-0.5*(this.pO)^0.25))
-            #electroR = 1e-0*((exp(1)*(bu[1]/(1-bu[1]))^0.5*(this.pO)^-0.25 ) - exp(-1)*((bu[1]/(1-bu[1]))^-0.5*(this.pO)^0.25))
-            #electroR = -1e-0 
-            f[iy]= this.DDs*(
-                            this.dPsi + this.kB*this.T/this.mO*(
-                              log(u[iy]*(1-bu[1])) - log(bu[1]*(1-u[iy]))
-                            )
-                  )
-            # if bulk chem. pot. > surf. ch.p. then positive flux from bulk to surf
-            # sign is negative bcs of the equation implementation
-            bf[1]= electroR-this.DDs*( # adsorption term
-                            this.dPsi + this.kB*this.T/this.mO*(
-                              log(u[iy]*(1-bu[1])) - log(bu[1]*(1-u[iy]))
-                            )
-                  ) 
-            f[iphi]=0
-        else
-            f[iy]=0        
-            f[iphi]=0
-        end
-    end
-    # function breaction3!(this::YSZParameters,f,bf,u,bu)
-    #     if  this.bregion==1
-    #         f[iy]=this.DDs*(
-    #                         this.dPsi + this.kB*this.T*(
-    #                           abs(log(u[iy]*(1-bu[1])) - log(bu[1]*(1-u[iy])))
-    #                         )
-    #               )
-    #         bf[1]=-this.DDs*(
-    #                         this.dPsi + this.kB*this.T*(
-    #                           abs(log(u[iy]*(1-bu[1])) - log(bu[1]*(1-u[iy])))
-    #                         )
-    #               )
-    #         f[iphi]=0
-    #     else
-    #         f[iy]=0        
-    #         f[iphi]=0
-    #     end
-    # end
-    # function breaction2!(this::YSZParameters,f,bf,u,bu)
-    #   if  this.bregion==1
-    #       f[iy]=(u[iy]-bu[1])
-    #       bf[1]=(bu[1]-u[iy])
-    #   else
-    #       f[1]=0        
-    #       f[2]=0
-    #   end
-    # end
- 
-    function bstorage!(this::YSZParameters,bf,bu)
-        if  this.bregion==1
-            bf[1]=this.mO*this.ms_par*(1.0-this.nu)/this.areaL*bu[1]
-        else
-            bf[1]=0        
-        end
-    end
-
-
-    if flux==1 
-        fluxx=flux1!
-    elseif flux==2 
-        fluxx=flux2!
-    elseif flux==3 
-        fluxx=flux3!
-    elseif flux==4 
-        fluxx=flux4!
-    end
-
-    if storage==1 
-        storagex=storage1!
-    elseif storage==2
-        storagex=storage2!
-    end
-
-    if xbreaction == 1
-        breaction=breaction1!
-    elseif xbreaction == 2
-        breaction=breaction2!
-    elseif xbreaction == 3
-        breaction=breaction3!
-    end
-
-    parameters.storage=storagex
-    parameters.flux=fluxx
+    parameters.storage=storage!
+    parameters.flux=flux!
     parameters.reaction=reaction!
-    parameters.breaction=breaction
+    parameters.breaction=breaction!
     parameters.bstorage=bstorage!
 
     printfields(parameters)
@@ -275,20 +215,7 @@ function run_ysz(;n=10, verbose=true,pyplot=false,flux=4, storage=2, xbreaction=
     end
     inival_boundary = boundary_unknowns(sys,inival,1)
     inival_boundary[1]= parameters.y0
-    if false 
-      print("phi_init: ") 
-      print(inival_bulk[iphi,:])
-      print("\n")
-      print("y_init: ") 
-      print(inival_bulk[iy,:])
-      print("\n")
-      print("ys_init: ") 
-      print(inival_boundary)
-      print(parameters.areaL)
-    end 
 
-    #parameters.eps=1.0e-2
-    #parameters.a=5
     control=TwoPointFluxFVM.NewtonControl()
     control.verbose=verbose
     control.tol_linear=1.0e-4
@@ -299,60 +226,147 @@ function run_ysz(;n=10, verbose=true,pyplot=false,flux=4, storage=2, xbreaction=
     control.damp_initial=0.01
     control.damp_growth=2
     time=0.0
-    time_range=zeros(0)
-    istep=0
-    Ub=zeros(0)
-    tend=1.0e-4
-    tstep=1.0e-7
-    append!(time_range,time)
-    append!(Ub,inival_boundary[1])
-    while time<tend
-        time=time+tstep
-        U=solve(sys,inival,control=control,tstep=tstep)
-        inival.=U
-        # for i=1:length(inival)
-        #     inival[i]=U[i]
-        # end
-        if verbose
-            @printf("time=%g\n",time)
-        end
-        U_bulk=bulk_unknowns(sys,U)
-        U_bound=boundary_unknowns(sys,U,1)
-        append!(time_range,time)
-        append!(Ub,U_bound[1,1])
+    if !voltametry
+      time_range=zeros(0)
+      istep=0
+      Ub=zeros(0)
+      tend=1.0e-4
+      tstep=1.0e-7
+      append!(time_range,time)
+      append!(Ub,inival_boundary[1])
 
-        if pyplot && istep%10 == 0
-        #if pyplot 
-            @printf("max1=%g max2=%g maxb=%g\n",maximum(U_bulk[1,:]),maximum(U_bulk[2,:]),maximum(U_bound))
-            PyPlot.clf()
-            subplot(211)
-            plot(X,U_bulk[1,:],label="spec1")
-            plot(X,U_bulk[2,:],label="spec2")
-            PyPlot.legend(loc="best")
-            PyPlot.grid()
-            subplot(212)
-            plot(time_range,Ub,label="U_b")
-            PyPlot.legend(loc="best")
-            PyPlot.grid()
-            pause(1.0e-10)
-            print(U_bound)
-        end
+      while time<tend
+          time=time+tstep
+          U=solve(sys,inival,control=control,tstep=tstep)
+          inival.=U
+          if verbose
+              @printf("time=%g\n",time)
+          end
+          U_bulk=bulk_unknowns(sys,U)
+          U_bound=boundary_unknowns(sys,U,1)
+          append!(time_range,time)
+          append!(Ub,U_bound[1,1])
+  
+          if pyplot && istep%10 == 0
+              @printf("max1=%g max2=%g maxb=%g\n",maximum(U_bulk[1,:]),maximum(U_bulk[2,:]),maximum(U_bound))
+              PyPlot.clf()
+              subplot(211)
+              plot(X,U_bulk[1,:],label="spec1")
+              plot(X,U_bulk[2,:],label="spec2")
+              PyPlot.legend(loc="best")
+              PyPlot.grid()
+              subplot(212)
+              plot(time_range,Ub,label="U_b")
+              PyPlot.legend(loc="best")
+              PyPlot.grid()
+              pause(1.0e-10)
+              print(U_bound)
+          end
+          tstep*=1.05
+      end
+    # 
+    # voltametry
+    # 
+    else
+      istep=0
+      phi=0
+      Ub=zeros(0)
+      phi_range=zeros(0)
+      phi_range_full=zeros(0)
+      Is_range=zeros(0)
+      Ib_range=zeros(0)
+      Ibb_range=zeros(0)
+      r_range=zeros(0)
+      print("calculating linear potential sweep\n")
+      hc_count = 0
+      dtstep=1e-4
+      tstep=1/voltrate/sample
+      dir=1
+      while hc_count < 3
+          if (phi <= -bound || phi >= bound) 
+              dir*=(-1)
+              phi+=tstep*dir*voltrate
+              hc_count+=1
+              print("cycle: ", hc_count,"\n")
+          end
+          # tstep to potential phi
+          sys.boundary_values[iphi,1]=phi
+          U=solve(sys,inival,control=control,tstep=tstep)
+          inival.=U
+          Qb=integrate(sys,reaction!,U)
+          dphiB=parameters.eps0*(1+parameters.chi)*(0 - bulk_unknowns(sys,U)[end][1])/h
+          y_bound=boundary_unknowns(sys,U,1)
+          Qs= -(parameters.e0/parameters.areaL)*parameters.zA*y_bound*parameters.ms_par*(1-parameters.nus)
+          # dtstep to potential phi + voltrate*dtstep
+          sys.boundary_values[iphi,1]=phi+voltrate*dtstep
+          Ud=solve(sys,U,control=control,tstep=dtstep)
+          Qbd=integrate(sys,reaction!,Ud)
+          dphiBd = parameters.eps0*(1+parameters.chi)*(0 - bulk_unknowns(sys,Ud)[end][1])/h
+          yd_bound=boundary_unknowns(sys,Ud,1)
+          Qsd= -(parameters.e0/parameters.areaL)*parameters.zA*yd_bound*parameters.ms_par*(1-parameters.nus)
+          # time derivatives
+          dphiBdt = (-dphiB + dphiBd)/dtstep
+          Ibb =- dphiBdt
+          Ib=(Qbd[iphi] - Qb[iphi])/dtstep #- dphiBdt
+          Is=(Qsd[1] - Qs[1])/dtstep
+          # reaction average
+          reac = electroreaction(parameters, y_bound)
+          reacd = electroreaction(parameters, yd_bound)
+          Ir=0.5*(reac + reacd)
+          #
+          if verbose
+              @printf("time=%g\n",time)
+          end
+          U_bulk=bulk_unknowns(sys,U)
+          U_bound=boundary_unknowns(sys,U,1)
+          append!(Ub,U_bound[1,1])
+          append!(phi_range_full,phi)
+          # forget the initialization
+          if hc_count > 0
+              append!(phi_range,phi)
+              append!(Is_range,Is)
+              append!(Ib_range,Ib)
+              append!(Ibb_range,Ibb)
+              append!(r_range, Ir)
+          end
+          istep+=1
 
-        # if pyplot
-        #     PyPlot.clf()
-        #     PyPlot.plot(geom.node_coordinates[1,:],U_bulk[iphi,:], label="Potential", color="g")
-        #     PyPlot.plot(geom.node_coordinates[1,:],U_bulk[iy,:], label="y", color="b")
-        #     PyPlot.grid()
-        #     PyPlot.legend(loc="upper right")
-        #     PyPlot.pause(1.0e-10)
-        # end
-        tstep*=1.05
-    end
-end
-
-
-
-if !isinteractive()
-    @time run_ysz(n=100,pyplot=true)
-    waitforbuttonpress()
+          if pyplot && istep%10 == 0
+              #@printf("dphiB=%g\n", dphiB)
+              PyPlot.clf()
+              subplot(211)
+              plot(X,U_bulk[1,:],label="spec1")
+              plot(X,U_bulk[2,:],label="spec2")
+              PyPlot.legend(loc="best")
+              PyPlot.grid()
+              subplot(212)
+              plot(collect(1:istep),Ub,label="U_b")
+              plot(collect(1:istep),phi_range_full,label="phi")
+              PyPlot.legend(loc="best")
+              PyPlot.grid()
+              pause(1.0e-10)
+          end
+          phi+=tstep*dir*voltrate
+      end
+  PyPlot.clf()
+  subplot(221)
+  plot(phi_range, Ib_range ,label="bulk")
+  plot(phi_range, Ibb_range ,label="bulk_grad")
+  plot(phi_range, Is_range ,label="surf")
+  plot(phi_range, r_range ,label="reac")
+  PyPlot.legend(loc="best")
+  PyPlot.grid()
+  subplot(222)
+  plot(phi_range, Is_range + Ib_range + r_range + Ibb_range ,label="spec1")
+  PyPlot.legend(loc="best")
+  PyPlot.grid()
+  subplot(223)
+  #plot(phi_range, r_range ,label="spec1")
+  PyPlot.legend(loc="best")
+  PyPlot.grid()
+  subplot(224)
+  #plot(phi_range, r_range ,label="spec1")
+  PyPlot.legend(loc="best")
+  PyPlot.grid()
+  end
 end
