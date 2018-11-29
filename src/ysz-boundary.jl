@@ -14,12 +14,15 @@ mutable struct YSZParameters <:TwoPointFluxFVM.Physics
     x_frac::Float64 # Y2O3 mol mixing, x [%] 
     vL::Float64     # volume of one FCC cell, v_L [m^3]
     nu::Float64    # ratio of immobile ions, \nu [1]
+    nus::Float64    # ratio of immobile ions on surface, \nu [1]
     ML::Float64   # averaged molar mass [kg]
     zL::Float64   # average charge number [1]
     DD::Float64   # diffusion coefficient [m^2/s]
     DDs::Float64   # surface adsorption coefficient [m^2/s]
     y0::Float64   # electroneutral value
     dPsi::Float64 # difference of gibbs free energy
+    dPsiR::Float64 # difference of gibbs free energy
+    R0::Float64 # difference of gibbs free energy
     areaL::Float64 # volume of one FCC cell, v_L [m^3]
     
     e0::Float64  
@@ -44,10 +47,13 @@ function YSZParameters(this)
     this.x_frac=0.2
     this.vL=3.35e-29
     this.areaL=(this.vL)^0.6666
-    this.nu=0.4
+    this.nu=0.0
+    this.nus=0.99
     this.DD=1.0e-13
-    this.DDs=1.#e-3   
-    this.dPsi=1.0e-19
+    this.DDs=-1.#e-3   
+    this.dPsi=0 #1.0-2.0e6#    -1.0e6 -- -2.0e6
+    this.dPsiR=1e5 #1.0-2.0e6#    -1.0e6 -- -2.0e6
+    this.R0=1e3
     #
     this.e0   = 1.602176565e-19  #  [C]
     this.eps0 = 8.85418781762e-12 #  [As/(Vm)] 
@@ -77,13 +83,11 @@ function printfields(this)
     end
 end
 
-
-
 const iphi=1
 const iy=2
 
 
-function run_ysz(;n=10, verbose=true,pyplot=false,flux=4, storage=2, xbreaction=2 ,width=1.0e-9)
+function run_ysz(;n=10, verbose=true,pyplot=false,flux=4, storage=2, xbreaction=2 ,width=1.0e-9,dlcap=false)
 
     h=width/convert(Float64,n)
     X=collect(0.0:h:width)
@@ -204,7 +208,7 @@ function run_ysz(;n=10, verbose=true,pyplot=false,flux=4, storage=2, xbreaction=
  
     function bstorage!(this::YSZParameters,bf,bu)
         if  this.bregion==1
-            bf[1]=this.mO*this.ms_par*(1.0-this.nu)/this.areaL*bu[1]
+            bf[1]=this.mO*this.ms_par*(1.0-this.nus)/this.areaL*bu[1]
         else
             bf[1]=0        
         end
@@ -242,7 +246,7 @@ function run_ysz(;n=10, verbose=true,pyplot=false,flux=4, storage=2, xbreaction=
     parameters.bstorage=bstorage!
 
     printfields(parameters)
-    print("weight ", parameters.mO*parameters.m_par*(1.0-parameters.nu)/parameters.vL,"\n")
+    #print("weight ", parameters.mO*parameters.m_par*(1.0-parameters.nu)/parameters.vL,"\n")
 
     sys=TwoPointFluxFVM.System(geom,parameters)
 
@@ -289,55 +293,152 @@ function run_ysz(;n=10, verbose=true,pyplot=false,flux=4, storage=2, xbreaction=
     control.damp_initial=0.01
     control.damp_growth=2
     time=0.0
-    time_range=zeros(0)
-    istep=0
     Ub=zeros(0)
-    tend=1.0e-4
-    tstep=1.0e-7
-    append!(time_range,time)
-    append!(Ub,inival_boundary[1])
-    while time<tend
-        time=time+tstep
-        U=solve(sys,inival,control=control,tstep=tstep)
-        inival.=U
-        # for i=1:length(inival)
-        #     inival[i]=U[i]
-        # end
-        if verbose
-            @printf("time=%g\n",time)
+    
+    if !dlcap 
+      time_range=zeros(0)
+      istep=0
+      tend=1.0e-4
+      tstep=1.0e-7
+      append!(time_range,time)
+      append!(Ub,inival_boundary[1])
+      while time<tend
+          time=time+tstep
+          U=solve(sys,inival,control=control,tstep=tstep)
+          inival.=U
+          # for i=1:length(inival)
+          #     inival[i]=U[i]
+          # end
+          if verbose
+              @printf("time=%g\n",time)
+          end
+          U_bulk=bulk_unknowns(sys,U)
+          U_bound=boundary_unknowns(sys,U,1)
+          append!(time_range,time)
+          append!(Ub,U_bound[1,1])
+  
+          if pyplot && istep%10 == 0
+          #if pyplot 
+              @printf("max1=%g max2=%g maxb=%g\n",maximum(U_bulk[1,:]),maximum(U_bulk[2,:]),maximum(U_bound))
+              PyPlot.clf()
+              subplot(211)
+              plot(X,U_bulk[1,:],label="spec1")
+              plot(X,U_bulk[2,:],label="spec2")
+              PyPlot.legend(loc="best")
+              PyPlot.grid()
+              subplot(212)
+              plot(time_range,Ub,label="U_b")
+              PyPlot.legend(loc="best")
+              PyPlot.grid()
+              pause(1.0e-10)
+              print(U_bound)
+          end
+  
+          # if pyplot
+          #     PyPlot.clf()
+          #     PyPlot.plot(geom.node_coordinates[1,:],U_bulk[iphi,:], label="Potential", color="g")
+          #     PyPlot.plot(geom.node_coordinates[1,:],U_bulk[iy,:], label="y", color="b")
+          #     PyPlot.grid()
+          #     PyPlot.legend(loc="upper right")
+          #     PyPlot.pause(1.0e-10)
+          # end
+          tstep*=1.05
+      end
+   else
+        print("calculating double layer capacitance\n")
+        delta=1.0e-4
+        for inode=1:size(inival,2)
+            inival[iphi,inode]=0
+            inival[iy,inode]=parameters.y0
         end
-        U_bulk=bulk_unknowns(sys,U)
-        U_bound=boundary_unknowns(sys,U,1)
-        append!(time_range,time)
-        append!(Ub,U_bound[1,1])
-
-        if pyplot && istep%10 == 0
-        #if pyplot 
-            @printf("max1=%g max2=%g maxb=%g\n",maximum(U_bulk[1,:]),maximum(U_bulk[2,:]),maximum(U_bound))
+        sys.boundary_values[iphi,1]=0
+        
+        dphi=1.0e-2
+        phimax=0.55
+        delta=1.0e-4
+        vplus=zeros(0)
+        cdlplus=zeros(0)
+        cplus=zeros(0)
+        splus=zeros(0)
+        vminus=zeros(0)
+        cdlminus=zeros(0)
+        cminus=zeros(0)
+        sminus=zeros(0)
+        for dir in [1,-1] # direction switch, neat...
+            sol=copy(inival)
+            phi=0.0
+            while phi<phimax
+                sys.boundary_values[iphi,1]=dir*phi
+						    sol=solve(sys,sol,control=control)
+                Q=integrate(sys,reaction!,sol)
+                y_bound=boundary_unknowns(sys,sol,1)
+                Qs= -(parameters.e0/parameters.areaL)*parameters.zA*y_bound*parameters.ms_par*(1-parameters.nus)
+                #print("Qs ", Qs,"\n")
+                sys.boundary_values[iphi,1]=dir*phi+delta
+                sol=solve(sys,sol,control=control)
+                Qdelta=integrate(sys,reaction!,sol)
+                yd_bound=boundary_unknowns(sys,sol,1)
+                Qsd= -(parameters.e0/parameters.areaL)*parameters.zA*yd_bound*parameters.ms_par*(1-parameters.nus)
+                c=(Qdelta[iphi] - Q[iphi])/delta
+                s=(Qsd[1] - Qs[1])/delta
+                cdl=(Qdelta[iphi] - Q[iphi] +Qsd[1]-Qs[1])/delta
+                if dir==1
+                    push!(vplus,dir*phi)
+                    push!(cdlplus,cdl)
+                    push!(cplus,c)
+                    push!(splus,s)
+                else
+                    push!(vminus,dir*phi)
+                    push!(cdlminus,cdl)
+                    push!(cminus,c)
+                    push!(sminus,s)
+                end
+              if false
+                  #@printf("max1=%g max2=%g maxb=%g\n",maximum(U_bulk[1,:]),maximum(U_bulk[2,:]),maximum(U_bound))
+                  U_bulk=bulk_unknowns(sys,sol)
+                  PyPlot.clf()
+                  #subplot(211)
+                  plot(X,U_bulk[1,:],label="spec1")
+                  plot(X,U_bulk[2,:],label="spec2")
+                  PyPlot.legend(loc="best")
+                  PyPlot.grid()
+                  #subplot(212)
+                  #plot(time_range,Ub,label="U_b")
+                  #PyPlot.legend(loc="best")
+                  #PyPlot.grid()
+                  pause(1.0e-10)
+                  print(y_bound)
+              end
+                phi+=dphi
+            end
+        end
+        if pyplot
             PyPlot.clf()
-            subplot(211)
-            plot(X,U_bulk[1,:],label="spec1")
-            plot(X,U_bulk[2,:],label="spec2")
-            PyPlot.legend(loc="best")
+            subplot(411)
+            PyPlot.plot(vplus,cdlplus,color="g")
+            PyPlot.plot(vminus,cdlminus,color="g")
             PyPlot.grid()
-            subplot(212)
-            plot(time_range,Ub,label="U_b")
-            PyPlot.legend(loc="best")
+            PyPlot.legend(loc="upper right")
+            subplot(412)
+            PyPlot.plot(vplus, cplus,color="g")
+            PyPlot.plot(vminus,cminus,color="g")
             PyPlot.grid()
-            pause(1.0e-10)
-            print(U_bound)
+            PyPlot.legend(loc="upper right")
+            subplot(413)
+            PyPlot.plot(vplus,splus,color="g")
+            PyPlot.plot(vminus,sminus,color="g")
+            PyPlot.grid()
+            PyPlot.legend(loc="upper right")
+            subplot(414)
+            PyPlot.plot(vplus,cplus-cdlplus,color="g")
+            PyPlot.plot(vminus,cminus-cdlminus,color="g")
+            PyPlot.grid()
+            PyPlot.legend(loc="upper right")
+
         end
 
-        # if pyplot
-        #     PyPlot.clf()
-        #     PyPlot.plot(geom.node_coordinates[1,:],U_bulk[iphi,:], label="Potential", color="g")
-        #     PyPlot.plot(geom.node_coordinates[1,:],U_bulk[iy,:], label="y", color="b")
-        #     PyPlot.grid()
-        #     PyPlot.legend(loc="upper right")
-        #     PyPlot.pause(1.0e-10)
-        # end
-        tstep*=1.05
-    end
+
+  end
 end
 
 
