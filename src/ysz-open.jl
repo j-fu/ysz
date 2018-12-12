@@ -90,42 +90,55 @@ end
 const iphi=1
 const iy=2
 
-function flux!(this::YSZParameters,f,uk,ul)
-    f[iphi]=this.eps0*(1+this.chi)*(uk[iphi]-ul[iphi])
-    muk=log(1-uk[iy])
-    mul=log(1-ul[iy])
-    bp,bm=fbernoulli_pm(
-        -1.0*(ul[iphi]-uk[iphi])*this.zA*this.e0/this.T/this.kB*(
-1.0 + this.mO/this.ML*this.m_par*(1.0-this.nu)*0.5*(uk[iy]+ul[iy])
-        )
-  +(mul-muk)*(
-1.0 +this.mO*(1-this.m_par*this.nu)/this.ML
-  )
-    )
-    f[iy]=(1+this.mO*this.m_par*(1.0-this.nu)*0.5*(uk[iy]+ul[iy])/this.ML)*this.DD*this.kB/this.mO*(bm*uk[iy]-bp*ul[iy]) # prefactor checked
-end
-
+# time derivatives
 function storage!(this::YSZParameters, f,u)
     f[iphi]=0
     f[iy]=this.mO*this.m_par*(1.0-this.nu)*u[iy]/this.vL
 end
 
+function bstorage!(this::YSZParameters,bf,bu)
+    if  this.bregion==1
+        bf[1]=this.mO*this.ms_par*(1.0-this.nus)/this.areaL*bu[1]
+    else
+        bf[1]=0
+    end
+end
+
+# bulk flux
+function flux!(this::YSZParameters,f,uk,ul)
+    f[iphi]=this.eps0*(1+this.chi)*(uk[iphi]-ul[iphi])
+    muk=log(1-uk[iy])
+    mul=log(1-ul[iy])
+    bp,bm=fbernoulli_pm(
+        -(ul[iphi]-uk[iphi])*this.zA*this.e0/this.T/this.kB*(
+            1.0 + this.mO/this.ML*this.m_par*(1.0-this.nu)*0.5*(uk[iy]+ul[iy])
+        )
+        +(mul-muk)*(
+            1.0 + this.mO/this.ML*this.m_par*(
+                      1-this.nu
+                  )
+        )
+    )
+    f[iy]=(1.0 + this.mO/this.ML*this.m_par*(1.0-this.nu)*0.5*(uk[iy]+ul[iy]))*this.DD*this.kB/this.mO*(bm*uk[iy]-bp*ul[iy]) # pre-factor checked
+end
+
+# sources
 function reaction!(this::YSZParameters, f,u)
-    # source term for the Poisson equation, beware of the sign
-    f[iphi]=-(this.e0/this.vL)*(this.zA*u[iy]*this.m_par*(1-this.nu) + this.zL)
+    f[iphi]=-(this.e0/this.vL)*(this.zA*u[iy]*this.m_par*(1-this.nu) + this.zL) # source term for the Poisson equation, beware of the sign
     f[iy]=0
 end
 
+# surface reaction
 function electroreaction(this::YSZParameters, bu)
     if this.R0 > 0
       eR = this.R0*((exp(this.dPsiR)*(bu[1]/(1-bu[1]))^0.5*(this.pO)^-0.25 ) - exp(-this.dPsiR)*((bu[1]/(1-bu[1]))^-0.5*(this.pO)^0.25))
       #eR = this.R0/this.e0*this.mO*sinh(this.dPsiR/this.T/this.kB + 0.5*log(bu[1]) - 0.5*log(1-bu[1]) - 0.25*log(this.pO))
-      #eR = 1e-0*((exp(1)*(bu[1]/(1-bu[1]))^0.5*(this.pO)^-0.25 ) - exp(-1)*((bu[1]/(1-bu[1]))^-0.5*(this.pO)^0.25))
     else
         eR=0
     end
 end
 
+# surface reaction + adsorption
 function breaction!(this::YSZParameters,f,bf,u,bu)
     if  this.bregion==1
         electroR=electroreaction(this,bu)
@@ -158,13 +171,6 @@ function breaction2!(this::YSZParameters,f,bf,u,bu)
   end
 end
 
-function bstorage!(this::YSZParameters,bf,bu)
-    if  this.bregion==1
-        bf[1]=this.mO*this.ms_par*(1.0-this.nu)/this.areaL*bu[1]
-    else
-        bf[1]=0
-    end
-end
 # function flux1!(this::YSZParameters,f,uk,ul)
 #     f[iphi]=this.eps0*(1+this.chi)*(uk[iphi]-ul[iphi])
 #     muk=-log(1-uk[iy])
@@ -173,19 +179,19 @@ end
 #     f[iy]=bm*uk[iy]-bp*ul[iy]
 # end
 
-function direct_capacitance(this::YSZParameters, bound)
+function direct_capacitance(this::YSZParameters, domain)
     # Clemens' analytic solution
-    PHI = collect(-bound:0.001:bound) # PHI = phi_B-phi_S
+    PHI = domain#collect(-bound:0.001:bound) # PHI = phi_B-phi_S
     #
     yB = -this.zL/this.zA/this.m_par/(1-this.nu);
     X  = yB/(1-yB)*exp.(this.zA*this.e0/this.kB/this.T*PHI)
     y  = X./(1.0.+X)
     #
-    nF = this.e0/this.vL*(this.zL.+this.zA*this.m_par*(1-this.nu).*y)
+    nF = this.e0/this.vL*(this.zL .+ this.zA*this.m_par*(1-this.nu)*y)
     F  = sign.(PHI).*sqrt.(
           2*this.e0/this.vL/this.eps0/(1.0+this.chi).*(
             this.zL.*PHI .+ this.kB*this.T/this.e0*this.m_par*(1-this.nu)*log.(
-              (1-yB).*(X.+1.0)
+              (1-yB).*(X .+ 1.0)
              )
            )
          );
@@ -194,7 +200,7 @@ function direct_capacitance(this::YSZParameters, bound)
     #
     CS = this.zA^2*this.e0^2/this.kB/this.T*this.ms_par/this.areaL*(1-this.nus)*Y./(1.0.+Y).^2;
     CBL  = nF./F;
-    return CBL, CS, Y, PHI
+    return CBL, CS, y
 end
 
 function run_open(;n=15, verbose=false ,pyplot=false, width=2.0e-9, voltametry=false, dlcap=false,voltrate=1, bound=0.3, sample=300)
@@ -390,25 +396,27 @@ function run_open(;n=15, verbose=false ,pyplot=false, width=2.0e-9, voltametry=f
         PyPlot.legend(loc="best")
         PyPlot.grid()
     elseif dlcap 
-        parameters.R0=0;
+        parameters.R0=0; # no surface reaction
         print("calculating double layer capacitance\n")
         for inode=1:size(inival,2)
             inival[iphi,inode]=0
             inival[iy,inode]=parameters.y0
         end
         sys.boundary_values[iphi,1]=0
-        dphi=5.0e-3
+        dphi=1.0e-2
         delta=1.0e-5
-        phimax=bound#0.55
+        phimax=bound
         v=zeros(0)
         cdl=zeros(0)
         cb=zeros(0)
         si=zeros(0)
         ys=zeros(0)
+        yb_s=zeros(0)
         for dir in [1,-1] # direction switch, neat...
             sol=copy(inival)
             phi=0.0
-            while phi<phimax
+            while phi<=phimax+1e-6
+                #print(phi,", ")
                 sys.boundary_values[iphi,1]=dir*phi
                 sol=solve(sys,sol,control=control)
                 Q=integrate(sys,reaction!,sol)
@@ -428,55 +436,60 @@ function run_open(;n=15, verbose=false ,pyplot=false, width=2.0e-9, voltametry=f
                 else
                     add=prepend!
                 end
+                #print(v,"\n")
                 add(v,dir*phi)
                 add(cb,c)
                 add(si,s)
                 add(ys,y_bound)
-              if true
-                  #@printf("max1=%g max2=%g maxb=%g\n",maximum(U_bulk[1,:]),maximum(U_bulk[2,:]),maximum(U_bound))
-                  U_bulk=bulk_unknowns(sys,sol)
-                  PyPlot.clf()
-                  subplot(211)
-                  plot(X,U_bulk[1,:],label="phi")
-                  plot(X,U_bulk[2,:],label="y")
-                  PyPlot.legend(loc="best")
-                  PyPlot.grid()
-                  subplot(212)
-                  plot(v,ys,label="FVM y_s")
-                  PyPlot.legend(loc="best")
-                  PyPlot.grid()
-                  pause(1.0e-10)
-                  #print(y_bound)
-              end
+                add(yb_s,convert(Float64,bulk_unknowns(sys,sol)[2][1]))
+                if true
+                    #@printf("max1=%g max2=%g maxb=%g\n",maximum(U_bulk[1,:]),maximum(U_bulk[2,:]),maximum(U_bound))
+                    U_bulk=bulk_unknowns(sys,sol)
+                    PyPlot.clf()
+                    subplot(211)
+                    plot(X,U_bulk[1,:],label="phi")
+                    plot(X,U_bulk[2,:],label="y")
+                    PyPlot.legend(loc="best")
+                    PyPlot.grid()
+                    subplot(212)
+                    plot(v,yb_s,label="FVM yb_s")
+                    plot(v,ys,label="FVM y_s")
+                    PyPlot.legend(loc="best")
+                    PyPlot.grid()
+                    pause(1.0e-10)
+                    #print(y_bound)
+                end
                 phi+=dphi
             end
         end
+        #print(v,
         if pyplot
-            CBL, CS, Y, PHI= direct_capacitance(parameters,bound) # analytic solution by Clemens
+            CBL, CS, Y= direct_capacitance(parameters,v) # analytic solution by Clemens
             PyPlot.clf()
             subplot(411)
             PyPlot.plot(v,cb+si,color="g", label="fvm b+s")
-            PyPlot.plot(PHI,reverse(CBL+CS),color="b", label="analytic b+s")
+            PyPlot.plot(v,reverse(CBL+CS),color="b", label="analytic b+s")
             PyPlot.grid()
             PyPlot.legend(loc="upper right")
             #
             subplot(412)
             PyPlot.plot(v, cb,color="g", label="FVM b")
-            PyPlot.plot(PHI,reverse(CBL),color="b", label="analytic b")
+            PyPlot.plot(v,reverse(CBL),color="b", label="analytic b")
             PyPlot.grid()
             PyPlot.legend(loc="upper right")
             #
             subplot(413)
             PyPlot.plot(v,si,color="g", label="FVM s")
-            PyPlot.plot(PHI, reverse(CS),color="b", label="analytic s")
+            PyPlot.plot(v, reverse(CS),color="b", label="analytic s")
             PyPlot.grid()
             PyPlot.legend(loc="upper right")
             #
             subplot(414)
-            PyPlot.plot(v,ys,color="g", label="fvm y_s")
-            PyPlot.plot(PHI,Y,color="b", label="analytic y_s")
+            #PyPlot.plot(v,yb_s,color="g", label="fvm y_b at S")
+            #PyPlot.plot(v,reverse(Y),color="b", label="analytic y_b at S")
+            PyPlot.plot(v,(reverse(Y) - yb_s)./yb_s,color="b", label="difference of y_b at S")
             PyPlot.grid()
-            PyPlot.legend(loc="upper right")
+            PyPlot.legend(loc="upper left")
         end
     end
 end
