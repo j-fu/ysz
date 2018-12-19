@@ -48,13 +48,13 @@ function YSZParameters(this)
     this.x_frac=0.2
     this.vL=3.35e-29
     this.areaL=(this.vL)^0.6666
-    this.nu=0.9
+    this.nu=0.5
     this.nus=0.9
     this.DD=1.0e-15
-    this.DDs=1-3#.e3
+    this.DDs=1e-3#.e3
     this.dPsi=-1.0e5
-    this.dPsiR=-1.0
-    this.R0=1.0e-3
+    this.dPsiR=2.0e0
+    this.R0=1.0e-4
     this.pO=1.0
     #
     this.e0   = 1.602176565e-19  #  [C]
@@ -196,7 +196,7 @@ function direct_capacitance(this::YSZParameters, domain)
            )
          );
     #
-    Y  = yB/(1-yB)*exp.(this.dPsi*this.mO .+ this.zA*this.e0/this.kB/this.T.*PHI);
+    Y  = yB/(1-yB)*exp.(this.dPsi*this.mO/this.kB/this.T .+ this.zA*this.e0/this.kB/this.T.*PHI);
     #
     CS = this.zA^2*this.e0^2/this.kB/this.T*this.ms_par/this.areaL*(1-this.nus)*Y./(1.0.+Y).^2;
     CBL  = nF./F;
@@ -295,6 +295,7 @@ function run_open(;n=15, verbose=false ,pyplot=false, width=2.0e-9, voltametry=f
     # voltametry
     #
     elseif voltametry
+        #parameters.R0=1e4; # surface reaction rate
         istep=0
         phi=0
         Ub=zeros(0)
@@ -306,15 +307,20 @@ function run_open(;n=15, verbose=false ,pyplot=false, width=2.0e-9, voltametry=f
         r_range=zeros(0)
         print("calculating linear potential sweep\n")
         hc_count = 0
-        dtstep=1e-4
-        tstep=1/voltrate/sample
+        dtstep=1e-6
+        tstep=bound/voltrate/sample
+        if dtstep > tstep
+            dtstep=0.1*tstep
+            print("dtstep refinement: ")
+        end
         dir=1
+        print("cycle: ")
         while hc_count < 3
             if (phi <= -bound || phi >= bound) 
                 dir*=(-1)
                 phi+=tstep*dir*voltrate
                 hc_count+=1
-                print("cycle: ", hc_count,"\n")
+                print(hc_count,", ")
             end
             # tstep to potential phi
             sys.boundary_values[iphi,1]=phi
@@ -324,7 +330,7 @@ function run_open(;n=15, verbose=false ,pyplot=false, width=2.0e-9, voltametry=f
             dphiB=parameters.eps0*(1+parameters.chi)*(0 - bulk_unknowns(sys,U)[end][1])/h 
             y_bound=boundary_unknowns(sys,U,1)
             Qs= -(parameters.e0/parameters.areaL)*parameters.zA*y_bound*parameters.ms_par*(1-parameters.nus) # - n^F_s
-            # dtstep to potential phi + voltrate*dtstep
+            # dtstep to potential (phi + voltrate*dtstep)
             sys.boundary_values[iphi,1]=phi+voltrate*dtstep
             Ud=solve(sys,U,control=control,tstep=dtstep)
             Qbd=integrate(sys,reaction!,Ud)
@@ -362,13 +368,13 @@ function run_open(;n=15, verbose=false ,pyplot=false, width=2.0e-9, voltametry=f
                 #@printf("dphiB=%g\n", dphiB)
                 PyPlot.clf()
                 subplot(211)
-                plot(X,U_bulk[1,:],label="spec1")
-                plot(X,U_bulk[2,:],label="spec2")
+                plot(X,U_bulk[1,:],label="phi")
+                plot(X,U_bulk[2,:],label="y")
                 PyPlot.legend(loc="best")
                 PyPlot.grid()
                 subplot(212)
-                plot(collect(1:istep),Ub,label="U_b")
-                plot(collect(1:istep),phi_range_full,label="phi")
+                plot(collect(1:istep),Ub,label="y_s")
+                plot(collect(1:istep),phi_range_full,label="phi_S")
                 PyPlot.legend(loc="best")
                 PyPlot.grid()
                 pause(1.0e-10)
@@ -384,17 +390,42 @@ function run_open(;n=15, verbose=false ,pyplot=false, width=2.0e-9, voltametry=f
         PyPlot.legend(loc="best")
         PyPlot.grid()
         subplot(222)
-        plot(phi_range, Is_range + Ib_range + r_range + Ibb_range ,label="spec1")
+        plot(phi_range, Is_range + Ib_range + r_range + Ibb_range ,label="total current")
         PyPlot.legend(loc="best")
         PyPlot.grid()
         subplot(223)
         #plot(phi_range, r_range ,label="spec1")
+        plot(collect(1:istep),Ub,label="y_s")
+        plot(collect(1:istep),phi_range_full,label="phi_S")
         PyPlot.legend(loc="best")
         PyPlot.grid()
-        subplot(224)
+        subplot(224, facecolor="w")
+        height=0.0
+        shift=0.0
+        swtch=false
+        for name in fieldnames(typeof(parameters))
+            if (string(name) == "chi" || swtch)
+                swtch = true
+                linestring = string(name,": ",getfield(parameters,name))
+                PyPlot.text(0.01+shift, 0.95+height, linestring, fontproperties="monospace")
+                height+=-0.05
+                if string(name) == "kB" 
+                    shift+=0.4
+                    height=0.0
+                end
+            end
+        end
+        parn = ["n", "verbose" ,"pyplot", "width", "voltametry", "dlcap","voltrate", "bound", "sample"]
+        parv =[n, verbose ,pyplot, width, voltametry, dlcap,voltrate, bound, sample]
+        for ii in 1:length(parn)
+            linestring=string(parn[ii],": ",parv[ii])
+            PyPlot.text(0.01+shift, 0.95+height, linestring, fontproperties="monospace")
+            height+=-0.05
+        end
         #plot(phi_range, r_range ,label="spec1")
-        PyPlot.legend(loc="best")
-        PyPlot.grid()
+        #PyPlot.legend(loc="best")
+        #PyPlot.grid()
+        savefig(string("./ysz/figures/",convert(Int64,log10(voltrate)),".png"), bbox_inches="tight")
     elseif dlcap 
         parameters.R0=0; # no surface reaction
         print("calculating double layer capacitance\n")
@@ -403,8 +434,8 @@ function run_open(;n=15, verbose=false ,pyplot=false, width=2.0e-9, voltametry=f
             inival[iy,inode]=parameters.y0
         end
         sys.boundary_values[iphi,1]=0
-        dphi=1.0e-2
-        delta=1.0e-5
+        dphi=1.0e-3
+        delta=1.0e-6
         phimax=bound
         v=zeros(0)
         cdl=zeros(0)
@@ -492,4 +523,11 @@ function run_open(;n=15, verbose=false ,pyplot=false, width=2.0e-9, voltametry=f
             PyPlot.legend(loc="upper left")
         end
     end
+end
+
+function voltrate_iter()
+  for ii = -4:4
+    vl=(10.0)^(ii)
+    run_open(n=200,verbose=false, pyplot=false, width=1.0e-9, voltametry=true, voltrate=vl, bound=.4, sample=300)
+  end
 end
