@@ -221,7 +221,7 @@ end
 
 function direct_capacitance(this::YSZParameters, domain)
     # Clemens' analytic solution
-    PHI = domain#collect(-bound:0.001:bound) # PHI = phi_B-phi_S
+    PHI = -domain#collect(-bound:0.001:bound) # PHI = phi_B-phi_S, so domain as phi_S goes with minus
     #
     yB = -this.zL/this.zA/this.m_par/(1-this.nu);
     X  = yB/(1-yB)*exp.(this.zA*this.e0/this.kB/this.T*PHI)
@@ -236,7 +236,7 @@ function direct_capacitance(this::YSZParameters, domain)
            )
          );
     #
-    Y  = yB/(1-yB)*exp(this.DGA*this.mO/this.kB/this.T + this.zA*this.e0/this.kB/this.T*PHI);
+    Y  = yB/(1-yB)*exp.(this.DGA/this.kB/this.T .+ this.zA*this.e0/this.kB/this.T*PHI);
     #
     CS = this.zA^2*this.e0^2/this.kB/this.T*this.ms_par/this.areaL*(1-this.nus)*Y./(1.0.+Y).^2;
     CBL  = nF./F;
@@ -326,7 +326,7 @@ end
 ###########################################################
 ###########################################################
 
-function run_new(;n=15, hexp=-8, verbose=false ,pyplot=false, width=10.0e-9, voltametry=false, save_files=false, voltrate=0.005, phi0=0.0, bound=0.5, sample=50, A0_in=-2, R0_in=2, DGA_in=-0.5, DGR_in=-1.0, beta_in=0.5, A_in = -1 )
+function run_new(;n=15, hexp=-8, verbose=false ,pyplot=false, width=10.0e-9, voltametry=false, dlcap=false, save_files=false, voltrate=0.005, phi0=0.0, bound=1.0, sample=50, A0_in=-2, R0_in=2, DGA_in=1.5, DGR_in=-1.0, beta_in=0.5, A_in = -1 )
 
     # A0_in \in [-6, 6]
     # R0_in \in [-6, 6]
@@ -338,6 +338,10 @@ function run_new(;n=15, hexp=-8, verbose=false ,pyplot=false, width=10.0e-9, vol
     # AREA OF THE ELECTROLYTE CUT
     AreaEllyt = 0.000201 * 0.6      # m^2     (1 - porosity)
     width_Ellyt = 0.00045           # m     width of the half-cell
+    if dlcap
+        AreaEllyt = 1      # m^2     (1 - porosity)
+        println("dlcap > area = 1")
+    end
     # 
     h=width/convert(Float64,n)
     dx_start = 10^convert(Float64,hexp)
@@ -365,6 +369,10 @@ function run_new(;n=15, hexp=-8, verbose=false ,pyplot=false, width=10.0e-9, vol
     # for parametric study
     parameters.A0 = 10.0^A0_in      # [1 / s]
     parameters.R0 = 10.0^R0_in      # [1 / m^2 s]
+    if dlcap
+        parameters.R0 = 0
+        println("dlcap > R0= ",parameters.R0)
+    end
     parameters.DGA = DGA_in * eV    # [J]
     parameters.DGR = DGR_in * eV    # [J]
     parameters.beta = beta_in       # [1]
@@ -397,7 +405,10 @@ function run_new(;n=15, hexp=-8, verbose=false ,pyplot=false, width=10.0e-9, vol
     inival_bulk=bulk_unknowns(sys,inival)
     
     phi0 = equil_phi(parameters)
-#    phi0 = 0
+    if dlcap
+        phi0 = 1e-5
+        println("dlcap > phi0= ", phi0)
+    end
 
 
     for inode=1:size(inival_bulk,2)
@@ -525,7 +536,7 @@ function run_new(;n=15, hexp=-8, verbose=false ,pyplot=false, width=10.0e-9, vol
         dtstep=1e-6
         tstep=bound/voltrate/sample      
         if dtstep > tstep
-            dtstep=0.1*tstep
+            dtstep=0.05*tstep
             print("dtstep refinement: ")
         end
         if phi0 > 0
@@ -699,7 +710,13 @@ function run_new(;n=15, hexp=-8, verbose=false ,pyplot=false, width=10.0e-9, vol
         PyPlot.grid()
         
         subplot(222)
-        plot(phi_range[istep_cv_start:end].-phi0, (Is_range + Ib_range + r_range + Ibb_range)[istep_cv_start:end] ,label="total current")
+        if dlcap
+            cbl, cs = direct_capacitance(parameters, collect(float(-bound):0.001:float(bound)))
+            plot(collect(float(-bound):0.001:float(bound)), (cbl+cs), label="clemens") 
+            plot(phi_range[istep_cv_start:end].-phi0, ((Is_range + Ib_range + r_range + Ibb_range)[istep_cv_start:end])/voltrate ,label="rescaled total current")# rescaled by voltrate
+        else
+            plot(phi_range[istep_cv_start:end].-phi0, ((Is_range + Ib_range + r_range + Ibb_range)[istep_cv_start:end]) ,label="total current")
+        end
         PyPlot.xlabel("E (V)")
         PyPlot.grid()
         
