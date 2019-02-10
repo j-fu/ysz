@@ -56,9 +56,18 @@ function YSZParameters(this)
     this.num_bspecies=[ 1, 0]
     
     
+    this.e0   = 1.602176565e-19  #  [C]
+    this.eps0 = 8.85418781762e-12 #  [As/(Vm)]
+    this.kB   = 1.3806488e-23  #  [J/K]
+    this.N_A  = 6.02214129e23  #  [#/mol]
+    this.mO  = 16/1000/this.N_A  #[kg/#]
+    this.mZr = 91.22/1000/this.N_A #  [kg/#]
+    this.mY  = 88.91/1000/this.N_A #  [kg/#]
+
+
     this.A0=1e-1#.e3
     this.R0=1.0e-2
-    this.DGA=-1.0e5
+    this.DGA= this.e0 # equivalent to 1eV
     this.DGR=0.0e-2
     this.beta=0.5
     this.A=2.
@@ -77,14 +86,7 @@ function YSZParameters(this)
     
     this.vL=3.35e-29
     this.areaL=(this.vL)^0.6666
-    this.e0   = 1.602176565e-19  #  [C]
-    this.eps0 = 8.85418781762e-12 #  [As/(Vm)]
-    this.kB   = 1.3806488e-23  #  [J/K]
-    this.N_A  = 6.02214129e23  #  [#/mol]
     this.zA  = -2;
-    this.mO  = 16/1000/this.N_A  #[kg/#]
-    this.mZr = 91.22/1000/this.N_A #  [kg/#]
-    this.mY  = 88.91/1000/this.N_A #  [kg/#]
     this.zL  = 4*(1-this.x_frac)/(1+this.x_frac) + 3*2*this.x_frac/(1+this.x_frac) - 2*this.m_par*this.nu
     this.y0  = -this.zL/(this.zA*this.m_par*(1-this.nu))
     this.ML  = (1-this.x_frac)/(1+this.x_frac)*this.mZr + 2*this.x_frac/(1+this.x_frac)*this.mY + this.m_par*this.nu*this.mO
@@ -363,7 +365,7 @@ function run_new(;n=15, hexp=-8, verbose=false ,pyplot=false, width=10.0e-9, vol
     #
     geom=TwoPointFluxFVM.Graph(X)
     #
-    eV = 1.602e-19   # electronvolt [J]
+    eV = this.e0   # electronvolt [J] = charge of electron * 1[V]
     
     parameters=YSZParameters()
     # for parametric study
