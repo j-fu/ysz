@@ -25,7 +25,9 @@ mutable struct YSZParameters <:TwoPointFluxFVM.Physics
     pO::Float64 # O2 partial pressure [bar]
     T::Float64      # Temperature [K]
     nu::Float64    # ratio of immobile ions, \nu [1]
-    nus::Float64    # ratio of immobile ions on surface, \nu [1]
+    nus::Float64    # ratio of immobile ions on surface, \nu_s [1]
+    numax::Float64  # max value of \nu 
+    nusmax::Float64  # max value of  \nu_s
     x_frac::Float64 # Y2O3 mol mixing, x [%] 
     chi::Float64    # dielectric parameter [1]
     m_par::Float64
@@ -82,7 +84,8 @@ function YSZParameters(this)
     this.chi=6.e0                   # from relative permitivity e_r = 6 ... TODO reference
     this.m_par = 2                  
     this.ms_par = this.m_par        
-    
+    this.numax = (2+this.x_frac)/this.m_par/(1+this.x_frac)
+    this.nusmax = (2+this.x_frac)/this.ms_par/(1+this.x_frac)
     
     this.vL=3.35e-29
     this.areaL=(this.vL)^0.6666
@@ -365,10 +368,10 @@ function run_new(;n=15, hexp=-8, verbose=false ,pyplot=false, width=10.0e-9, vol
     #
     geom=TwoPointFluxFVM.Graph(X)
     #
-    eV = this.e0   # electronvolt [J] = charge of electron * 1[V]
     
     parameters=YSZParameters()
     # for parametric study
+    eV = parameters.e0   # electronvolt [J] = charge of electron * 1[V]
     parameters.A0 = 10.0^A0_in      # [1 / s]
     parameters.R0 = 10.0^R0_in      # [1 / m^2 s]
     if dlcap
