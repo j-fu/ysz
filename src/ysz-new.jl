@@ -81,7 +81,7 @@ function YSZParameters(this)
     this.nu=0.3                     # assumption
     this.nus=0.3                    # assumption
     this.x_frac=0.08                # 8% YSZ
-    this.chi=6.e0                   # from relative permitivity e_r = 6 ... TODO reference
+    this.chi=5.e0                   # from relative permitivity e_r = 6 = (1 + \chi) ... TODO reference
     this.m_par = 2                  
     this.ms_par = this.m_par        
     this.numax = (2+this.x_frac)/this.m_par/(1+this.x_frac)
@@ -140,14 +140,14 @@ function flux!(this::YSZParameters,f,uk,ul)
         )*(ul[iphi] - uk[iphi])
     )
     f[iy]= (
-            this.DD
-            *
-            (1.0 + this.mO/this.ML*this.m_par*(1.0-this.nu)*0.5*(uk[iy]+ul[iy]))
-            *
-            this.mO*this.m_par*(1.0-this.nu)/this.vL
-            *
-            (bm*uk[iy]-bp*ul[iy])
-        )
+        this.DD
+        *
+        (1.0 + this.mO/this.ML*this.m_par*(1.0-this.nu)*0.5*(uk[iy]+ul[iy]))
+        *
+        this.mO*this.m_par*(1.0-this.nu)/this.vL
+        *
+        (bm*uk[iy]-bp*ul[iy])
+    )
 end
 
 
@@ -262,12 +262,12 @@ end
 
 function equil_phi(this::YSZParameters)
     B = exp( - (this.DGA + this.DGR) / (this.kB * this.T))*this.pO^(1/2.0)
-    println((this.DGA + this.DGR))
-    println((this.kB * this.T))
-    println(- (this.DGA + this.DGR) / (this.kB * this.T))
-    println(this.pO^(1/2.0))
-    println(B)
-    println(B/(1+B))
+    #println((this.DGA + this.DGR))
+    #println((this.kB * this.T))
+    #println(- (this.DGA + this.DGR) / (this.kB * this.T))
+    #println(this.pO^(1/2.0))
+    #println(B)
+    #println(B/(1+B))
     return y0_to_phi(this, B/(1+B))
 end
 
@@ -331,7 +331,7 @@ end
 ###########################################################
 ###########################################################
 
-function run_new(;n=15, hexp=-8, verbose=false ,pyplot=false, width=10.0e-9, voltametry=false, dlcap=false, save_files=false, voltrate=0.005, phi0=0.0, bound=1.0, sample=50, A0_in=-2, R0_in=2, DGA_in=1.5, DGR_in=-1.0, beta_in=0.5, A_in = -1 )
+function run_new(;hexp=-8, verbose=false ,pyplot=false, width=10.0e-9, voltametry=false, dlcap=false, save_files=false, voltrate=0.005, phi0=0.0, bound=1.0, sample=50, A0_in=-2, R0_in=2, DGA_in=0.0, DGR_in=-1.0, beta_in=0.5, A_in = -1, dtstep_in=1.0e-6 )
 
     # A0_in \in [-6, 6]
     # R0_in \in [-6, 6]
@@ -347,8 +347,7 @@ function run_new(;n=15, hexp=-8, verbose=false ,pyplot=false, width=10.0e-9, vol
         AreaEllyt = 1      # m^2     (1 - porosity)
         println("dlcap > area = 1")
     end
-    # 
-    h=width/convert(Float64,n)
+    #
     dx_start = 10^convert(Float64,hexp)
     
 
@@ -538,8 +537,17 @@ function run_new(;n=15, hexp=-8, verbose=false ,pyplot=false, width=10.0e-9, vol
 
         print("calculating linear potential sweep\n")
         direction_switch = 0
-        dtstep=1e-6
-        tstep=bound/voltrate/sample      
+        
+        
+        
+        
+        dtstep=dtstep_in
+        
+        
+        
+        
+        tstep=bound/voltrate/sample   
+        @printf("tstep %g ... dtstep %g\n",tstep, dtstep)
         if dtstep > tstep
             dtstep=0.05*tstep
             print("dtstep refinement: ")
@@ -590,16 +598,20 @@ function run_new(;n=15, hexp=-8, verbose=false ,pyplot=false, width=10.0e-9, vol
             U=solve(sys,inival,control=control,tstep=tstep)
             inival.=U
             Qb=integrate(sys,reaction!,U) # - \int n^F
-            dphiB=parameters.eps0*(1+parameters.chi)*(0 - bulk_unknowns(sys,U)[end][1])/h 
+            dphi_end = bulk_unknowns(sys,U)[iphi, end] - bulk_unknowns(sys,U)[iphi, end-1]
+            dx_end = X[end] - X[end-1]
+            dphiB=parameters.eps0*(1+parameters.chi)*(dphi_end/dx_end)
             y_bound=boundary_unknowns(sys,U,1)
-            Qs= -(parameters.e0/parameters.areaL)*parameters.zA*y_bound*parameters.ms_par*(1-parameters.nus) # - n^F_s
+            Qs= -(parameters.e0/parameters.areaL)*parameters.zA*y_bound*parameters.ms_par*(1-parameters.nus) # - (e0*zA*nA_s)
 
                  
             # dtstep to potential (phi + voltrate*dtstep)
             sys.boundary_values[iphi,1]=phi+voltrate*dir*dtstep
             Ud=solve(sys,U,control=control,tstep=dtstep)
             Qbd=integrate(sys,reaction!,Ud)
-            dphiBd = parameters.eps0*(1+parameters.chi)*(0 - bulk_unknowns(sys,Ud)[end][1])/h
+            dphid_end = bulk_unknowns(sys,Ud)[iphi, end] - bulk_unknowns(sys,Ud)[iphi, end-1]
+            dx_end = X[end] - X[end-1]
+            dphiBd = parameters.eps0*(1+parameters.chi)*(dphid_end/dx_end)
             yd_bound=boundary_unknowns(sys,Ud,1)
             Qsd= -(parameters.e0/parameters.areaL)*parameters.zA*yd_bound*parameters.ms_par*(1-parameters.nus)
 
@@ -755,8 +767,8 @@ function run_new(;n=15, hexp=-8, verbose=false ,pyplot=false, width=10.0e-9, vol
                 end
             end
         end
-        parn = ["n", "verbose" ,"pyplot", "width", "voltametry", "voltrate", "bound", "sample", "phi0"]
-        parv =[n, verbose ,pyplot, width, voltametry, voltrate, bound, sample, @sprintf("%.6g",phi0)]
+        parn = ["verbose" ,"pyplot", "width", "voltametry", "voltrate", "bound", "sample", "phi0"]
+        parv =[verbose ,pyplot, width, voltametry, voltrate, bound, sample, @sprintf("%.6g",phi0)]
         for ii in 1:length(parn)
             linestring=string(parn[ii],": ",parv[ii])
             PyPlot.text(0.01+shift, 0.95+height, linestring, fontproperties="monospace")
@@ -774,7 +786,8 @@ function run_new(;n=15, hexp=-8, verbose=false ,pyplot=false, width=10.0e-9, vol
             "_GR",@sprintf("%.0f",DGR_in),
             "_R0",@sprintf("%.0f",R0_in),
             "_be",@sprintf("%.0f",beta_in),
-            "_A",@sprintf("%.0f",A_in)
+            "_A",@sprintf("%.0f",A_in),
+            "_dtstep",@sprintf("%.2g",dtstep),
             )
 
 
@@ -788,7 +801,11 @@ function run_new(;n=15, hexp=-8, verbose=false ,pyplot=false, width=10.0e-9, vol
     end
 end
 
-
+function iter_dtstep()
+    for i in 1.0e-6*[2]
+        run_new(voltametry=true, dlcap=true, save_files=true, pyplot=true, dtstep_in=i)
+    end
+end
 
 #function par_study()
 #  err_counter::Int32 = 0
