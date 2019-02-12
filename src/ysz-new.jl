@@ -331,7 +331,7 @@ end
 ###########################################################
 ###########################################################
 
-function run_new(;hexp=-8, verbose=false ,pyplot=false, width=10.0e-9, voltametry=false, dlcap=false, save_files=false, voltrate=0.005, phi0=0.0, bound=1.0, sample=50, A0_in=-2, R0_in=2, DGA_in=0.0, DGR_in=-1.0, beta_in=0.5, A_in = -1, dtstep_in=1.0e-6 )
+function run_new(;hexp=-8, verbose=false ,pyplot=false, width=10.0e-9, voltametry=false, dlcap=false, save_files=false, voltrate=0.005, phi0=0.0, bound=1.0, sample=50, A0_in=-2, R0_in=2, DGA_in=-0.5, DGR_in=-1.0, beta_in=0.5, A_in = -1, dtstep_in=1.0e-6 )
 
     # A0_in \in [-6, 6]
     # R0_in \in [-6, 6]
@@ -525,7 +525,7 @@ function run_new(;hexp=-8, verbose=false ,pyplot=false, width=10.0e-9, voltametr
         Ibb_range=zeros(0)
         r_range=zeros(0)
         
-        MY_Ir_range=zeros(0)
+        MY_Iflux_range=zeros(0)
         MY_Itot_range=zeros(0)
         out_df = DataFrame(t = Float64[], U = Float64[], I = Float64[])
         
@@ -597,33 +597,39 @@ function run_new(;hexp=-8, verbose=false ,pyplot=false, width=10.0e-9, voltametr
             sys.boundary_values[iphi,1]=phi
             U=solve(sys,inival,control=control,tstep=tstep)
             inival.=U
+            
             Qb=integrate(sys,reaction!,U) # - \int n^F
+            
             dphi_end = bulk_unknowns(sys,U)[iphi, end] - bulk_unknowns(sys,U)[iphi, end-1]
             dx_end = X[end] - X[end-1]
             dphiB=parameters.eps0*(1+parameters.chi)*(dphi_end/dx_end)
+            
             y_bound=boundary_unknowns(sys,U,1)
-            Qs= -(parameters.e0/parameters.areaL)*parameters.zA*y_bound*parameters.ms_par*(1-parameters.nus) # - (e0*zA*nA_s)
+            Qs= (parameters.e0/parameters.areaL)*parameters.zA*y_bound*parameters.ms_par*(1-parameters.nus) # (e0*zA*nA_s)
 
                  
             # dtstep to potential (phi + voltrate*dtstep)
             sys.boundary_values[iphi,1]=phi+voltrate*dir*dtstep
             Ud=solve(sys,U,control=control,tstep=dtstep)
+            
             Qbd=integrate(sys,reaction!,Ud)
+            
             dphid_end = bulk_unknowns(sys,Ud)[iphi, end] - bulk_unknowns(sys,Ud)[iphi, end-1]
             dx_end = X[end] - X[end-1]
             dphiBd = parameters.eps0*(1+parameters.chi)*(dphid_end/dx_end)
+            
             yd_bound=boundary_unknowns(sys,Ud,1)
-            Qsd= -(parameters.e0/parameters.areaL)*parameters.zA*yd_bound*parameters.ms_par*(1-parameters.nus)
+            Qsd= (parameters.e0/parameters.areaL)*parameters.zA*yd_bound*parameters.ms_par*(1-parameters.nus) # (e0*zA*nA_s)
 
             # time derivatives
-            dphiBdt = (-dphiB + dphiBd)/dtstep
-            Ibb = -dphiBdt
-            Ib=(Qbd[iphi] - Qb[iphi])/dtstep #- dphiBdt
             Is=(Qsd[1] - Qs[1])/dtstep
+            Ib= - (Qbd[iphi] - Qb[iphi])/dtstep 
+            Ibb = (dphiBd - dphiB)/dtstep
+
 
             # reaction average
-            reac = -2*electroreaction(parameters, y_bound)
-            reacd = -2*electroreaction(parameters, yd_bound)
+            reac = -2*parameters.e0*electroreaction(parameters, y_bound)
+            reacd = -2*parameters.e0*electroreaction(parameters, yd_bound)
             Ir=0.5*(reac + reacd)
 
             #############################################################
@@ -642,21 +648,38 @@ function run_new(;hexp=-8, verbose=false ,pyplot=false, width=10.0e-9, voltametr
             U_bulk=bulk_unknowns(sys,U)
             U_bound=boundary_unknowns(sys,U,1)
             
+            
+            # control current by flux
+            #h = 1.0e-10
+            #xk = 1.0e-9
+            #xl = xk + h
+            #
+            #Uxk = get_unknowns(xk,X,U_bulk)
+            #Uxl = get_unknowns(xl,X,U_bulk)
+            #
+            #
+            ##println("Uxk ",Uxk)
+            ##println("Uxl ",Uxl)
+            ##println("diff ",Uxl - Uxk)
+            #j_om = get_material_flux(parameters,Uxk,Uxl,h)
+            #println("flux j_om ",j_om, "    current ",-AreaEllyt*j_om*(-2)*parameters.e0/parameters.mO, "  I ",Ibb+Is+Ib+Ir)
+            
             # storing data
             append!(time_range,tstep*istep)
             
             append!(U0_range,U_bulk[iy,1])
             append!(Ub_range,U_bound[1,1])
             append!(phi_range_full,phi)
-            
-            append!(MY_Ir_range,Ir)
-            append!(MY_Itot_range,Ibb+Is+Ib+Ir) 
 
             append!(phi_range,phi)
             append!(Ib_range,Ib)
             append!(Is_range,Is)
             append!(Ibb_range,Ibb)
             append!(r_range, Ir)
+            
+            #append!(MY_Iflux_range,-AreaEllyt*j_om*(-2)*parameters.e0/parameters.mO)
+            #append!(MY_Itot_range,Ibb+Is+Ib+Ir)            
+               
                
             if state=="cv_is_on"
                 push!(out_df,[(istep-istep_cv_start)*tstep   phi-phi0    Ibb+Is+Ib+Ir])
@@ -667,7 +690,7 @@ function run_new(;hexp=-8, verbose=false ,pyplot=false, width=10.0e-9, voltametr
             ##### my plotting                  
             if pyplot && istep%10 == 0
                 PyPlot.clf()
-                subplot(311)
+                subplot(411)
                 plot((10^9)*X[:],U_bulk[iphi,:],label="phi (V)")
                 plot((10^9)*X[:],U_bulk[iy,:],label="y")
                 plot(0,U_bound[1,1],"go", markersize=3, label="y_s")
@@ -678,7 +701,7 @@ function run_new(;hexp=-8, verbose=false ,pyplot=false, width=10.0e-9, voltametr
                 PyPlot.legend(loc="best")
                 PyPlot.grid()
                 
-                subplot(312)
+                subplot(412)
                 
                 #plot((10^9)*X[:],U_bulk[1,:],label="phi (V)")
                 
@@ -688,7 +711,7 @@ function run_new(;hexp=-8, verbose=false ,pyplot=false, width=10.0e-9, voltametr
                 PyPlot.legend(loc="best")
                 PyPlot.grid()
                 
-                subplot(313)
+                subplot(413)
                 plot(time_range,Ib_range, label = "I_bulk")
                 plot(time_range,Ibb_range, label = "I_bulkgrad")
                 plot(time_range,Is_range, label = "I_surf")
@@ -697,6 +720,10 @@ function run_new(;hexp=-8, verbose=false ,pyplot=false, width=10.0e-9, voltametr
                 PyPlot.xlabel("t (s)")
                 PyPlot.legend(loc="best")
                 PyPlot.grid()
+                
+                #subplot(414)
+                #plot(time_range, MY_Iflux_range, label = "I_flux")
+                #plot(time_range, MY_Itot_range, label = "I_tot")
                 
                 pause(1.0e-10)
             end
