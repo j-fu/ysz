@@ -78,10 +78,10 @@ function YSZParameters(this)
     this.DD=1.5658146540360312e-11  # fitted to conductivity 0.063 S/cm ... TODO reference
     this.pO=1.                      # O2 atmosphere 
     this.T=1073                     
-    this.nu=0.3                     # assumption
-    this.nus=0.3                    # assumption
+    this.nu=0.9                     # assumption
+    this.nus=0.9                    # assumption
     this.x_frac=0.08                # 8% YSZ
-    this.chi=5.e0                   # from relative permitivity e_r = 6 = (1 + \chi) ... TODO reference
+    this.chi=27.e0                   # from relative permitivity e_r = 6 = (1 + \chi) ... TODO reference
     this.m_par = 2                  
     this.ms_par = this.m_par        
     this.numax = (2+this.x_frac)/this.m_par/(1+this.x_frac)
@@ -341,7 +341,7 @@ end
 ###########################################################
 ###########################################################
 
-function run_new(;hexp=-8, verbose=false ,pyplot=false, width=10.0e-9, voltametry=false, dlcap=false, save_files=false, voltrate=0.005, phi0=0.0, bound=1.0, sample=50, A0_in=-10, R0_in=10, DGA_in=-0.0, DGR_in=0.1, beta_in=0.5, A_in = 0.1, dtstep_in=1.0e-6 )
+function run_new(;hexp=-8, verbose=false ,pyplot=false, width=10.0e-9, voltametry=false, dlcap=false, save_files=false, voltrate=0.005, phi0=0.0, bound=1.0, sample=50, A0_in=-2, R0_in=10, DGA_in=-0.0, DGR_in=0.1, beta_in=0.5, A_in = 0.1, dtstep_in=1.0e4 )
 
     # A0_in \in [-6, 6]
     # R0_in \in [-6, 6]
@@ -354,7 +354,7 @@ function run_new(;hexp=-8, verbose=false ,pyplot=false, width=10.0e-9, voltametr
     AreaEllyt = 0.000201 * 0.6      # m^2     (1 - porosity)
     width_Ellyt = 0.00045           # m     width of the half-cell
     if dlcap
-        AreaEllyt = 1      # m^2     (1 - porosity)
+        AreaEllyt = 1.0      # m^2     (1 - porosity)
         println("dlcap > area = 1")
     end
     #
@@ -541,7 +541,7 @@ function run_new(;hexp=-8, verbose=false ,pyplot=false, width=10.0e-9, voltametr
         MY_Iflux_range=zeros(0)
         MY_Iflux0_range = zeros(0)
         MY_Itot_range=zeros(0)
-        out_df = DataFrame(t = Float64[], U = Float64[], I = Float64[])
+        out_df = DataFrame(t = Float64[], U = Float64[], Itot = Float64[], Ibu = Float64[], Isu = Float64[], Ire = Float64[])
         
         cv_cycles = 2
         relaxation_length = 0    # how many "samples" should relaxation last
@@ -699,13 +699,17 @@ function run_new(;hexp=-8, verbose=false ,pyplot=false, width=10.0e-9, voltametr
                
                
             if state=="cv_is_on"
-                push!(out_df,[(istep-istep_cv_start)*tstep   phi-phi0    Ibb+Is+Ib+Ir])
+                if dlcap
+                    push!(out_df,[(istep-istep_cv_start)*tstep   phi-phi0    (Ib+Is+Ir)/voltrate    Ib/voltrate    Is/voltrate    Ir/voltrate])
+                else
+                    push!(out_df,[(istep-istep_cv_start)*tstep   phi-phi0    Ib+Is+Ir    Ib    Is    Ir])
+                end
             end
             
             
             
             ##### my plotting                  
-            if pyplot && istep%10 == 0
+            if pyplot && istep%10 == 0 #&& !dlcap
                 PyPlot.clf()
                 subplot(411)
                 plot((10^9)*X[:],U_bulk[iphi,:],label="phi (V)")
@@ -763,10 +767,17 @@ function run_new(;hexp=-8, verbose=false ,pyplot=false, width=10.0e-9, voltametr
         PyPlot.clf()
         
         subplot(221)
+        if dlcap
+          plot(phi_range[istep_cv_start:end].-phi0,( Ib_range[istep_cv_start:end] )/voltrate,label="bulk")
+          plot(phi_range[istep_cv_start:end].-phi0,( Ibb_range[istep_cv_start:end])/voltrate,label="bulk_grad")
+          plot(phi_range[istep_cv_start:end].-phi0,( Is_range[istep_cv_start:end] )/voltrate,label="surf")
+          plot(phi_range[istep_cv_start:end].-phi0,( r_range[istep_cv_start:end]  )/voltrate,label="reac")
+        else
         plot(phi_range[istep_cv_start:end].-phi0, Ib_range[istep_cv_start:end] ,label="bulk")
         plot(phi_range[istep_cv_start:end].-phi0, Ibb_range[istep_cv_start:end] ,label="bulk_grad")
         plot(phi_range[istep_cv_start:end].-phi0, Is_range[istep_cv_start:end] ,label="surf")
         plot(phi_range[istep_cv_start:end].-phi0, r_range[istep_cv_start:end] ,label="reac")
+        end
         PyPlot.xlabel("E (V)")
         PyPlot.ylabel("I (A)")
         PyPlot.legend(loc="best")
@@ -775,12 +786,15 @@ function run_new(;hexp=-8, verbose=false ,pyplot=false, width=10.0e-9, voltametr
         subplot(222)
         if dlcap
             cbl, cs = direct_capacitance(parameters, collect(float(-bound):0.001:float(bound)))
-            plot(collect(float(-bound):0.001:float(bound)), (cbl+cs), label="clemens") 
+            plot(collect(float(-bound):0.001:float(bound)), (cbl+cs), label="tot CG") 
+            plot(collect(float(-bound):0.001:float(bound)), (cbl), label="b CG") 
+            plot(collect(float(-bound):0.001:float(bound)), (cs), label="s CG") 
             plot(phi_range[istep_cv_start:end].-phi0, ((Is_range + Ib_range + r_range + Ibb_range)[istep_cv_start:end])/voltrate ,label="rescaled total current")# rescaled by voltrate
         else
             plot(phi_range[istep_cv_start:end].-phi0, ((Is_range + Ib_range + r_range + Ibb_range)[istep_cv_start:end]) ,label="total current")
         end
         PyPlot.xlabel("E (V)")
+        PyPlot.legend(loc="best")
         PyPlot.grid()
         
         subplot(223)
@@ -833,11 +847,11 @@ function run_new(;hexp=-8, verbose=false ,pyplot=false, width=10.0e-9, voltametr
             "_R0",@sprintf("%.0f",R0_in),
             "_be",@sprintf("%.0f",beta_in),
             "_A",@sprintf("%.0f",A_in),
-            "_dtstep",@sprintf("%.2g",dtstep),
+            "_vrate",@sprintf("%.2g",voltrate),
             )
 
 
-            CSV.write(string("./data/",out_name,".csv"),out_df)
+            CSV.write(string("./data/",out_name,".csv"),out_df, delim=" ")
             if pyplot
                 PyPlot.savefig(string("./images/",out_name,".png"))
             end
@@ -850,6 +864,12 @@ end
 function iter_dtstep()
     for i in 1.0e-6*[2]
         run_new(voltametry=true, dlcap=true, save_files=true, pyplot=true, dtstep_in=i)
+    end
+end
+
+function iter_voltrate()
+    for i in [10.0^i for i in collect(0:1:3)]
+        run_new(voltametry=true, dlcap=true, save_files=true, pyplot=true, voltrate=i, sample=2500, bound=.9, A0_in=-2)
     end
 end
 
