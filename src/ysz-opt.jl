@@ -9,13 +9,12 @@ using DataFrames
 using CSV
 using LeastSquaresOptim
 
-
 mutable struct YSZParameters <:TwoPointFluxFVM.Physics
     TwoPointFluxFVM.@AddPhysicsBaseClassFields
 
     # to fit
-    A0::Float64   # surface adsorption coefficient 
-    R0::Float64 # exhange current density [A/m^2]
+    A0::Float64   # surface adsorption coefficient [ s^-1 ]
+    R0::Float64 # exhange current density [m^-2 s^-1]
     DGA::Float64 # difference of gibbs free energy of adsorbtion
     DGR::Float64 # difference of gibbs free energy of electrochemical reaction
     beta::Float64 # symmetry of the reaction
@@ -365,9 +364,93 @@ function check_nodes_short()
         [0.2, -1, 0.18360864356578493],
         [-0.2, -1, -0.18914394378285262],
         [-0.4, 1, -0.758257259313434],
-        [-0.1, 1, -0.04691697173124805]]
+        [-0.1, 1, -0.04691697173124805]
+        ]
 end
 
+function check_nodes_long()
+    return [
+    [ 0.01 ,  1 ,  0.0156863321679 ],
+    [ 0.05 ,  1 ,  0.0281101995946 ],
+    [ 0.1 ,  1 ,  0.0468005909422 ],
+    [ 0.15 ,  1 ,  0.0716042511468 ],
+    [ 0.2 ,  1 ,  0.105453784583 ],
+    [ 0.25 ,  1 ,  0.150762565352 ],
+    [ 0.3 ,  1 ,  0.210008281387 ],
+    [ 0.35 ,  1 ,  0.285365362973 ],
+    [ 0.4 ,  1 ,  0.379518775659 ],
+    [ 0.4 ,  -1 ,  0.432316804894 ],
+    [ 0.35 ,  -1 ,  0.354766238866 ],
+    [ 0.3 ,  -1 ,  0.286613797492 ],
+    [ 0.25 ,  -1 ,  0.231818661618 ],
+    [ 0.2 ,  -1 ,  0.183608643566 ],
+    [ 0.15 ,  -1 ,  0.13934314172 ],
+    [ 0.1 ,  -1 ,  0.0974983134916 ],
+    [ 0.05 ,  -1 ,  0.0580951170398 ],
+    [ 0.0 ,  -1 ,  0.0178260739169 ],
+    [ -0.05 ,  -1 ,  -0.0284506730363 ],
+    [ -0.1 ,  -1 ,  -0.0767715103415 ],
+    [ -0.15 ,  -1 ,  -0.126002461059 ],
+    [ -0.2 ,  -1 ,  -0.189143943783 ],
+    [ -0.25 ,  -1 ,  -0.279117596195 ],
+    [ -0.3 ,  -1 ,  -0.403615421853 ],
+    [ -0.35 ,  -1 ,  -0.557567899648 ],
+    [ -0.4 ,  -1 ,  -0.741932592896 ],
+    [ -0.4 ,  1 ,  -0.758257259313 ],
+    [ -0.35 ,  1 ,  -0.567389007323 ],
+    [ -0.3 ,  1 ,  -0.406031747523 ],
+    [ -0.25 ,  1 ,  -0.265960837541 ],
+    [ -0.2 ,  1 ,  -0.168469540759 ],
+    [ -0.15 ,  1 ,  -0.101001232934 ],
+    [ -0.1 ,  1 ,  -0.0469169717312 ],
+    [ -0.05 ,  1 ,  -0.00825189012041 ],
+    [ -0.01 ,  1 ,  0.00942419878596 ],
+    ]
+end
+
+function check_nodes_whole()
+    return [
+    [ 0.01 ,  1 ,  0.0156863321679 ],
+    [ 0.05 ,  1 ,  0.0281101995946 ],
+    [ 0.1 ,  1 ,  0.0468005909422 ],
+    [ 0.15 ,  1 ,  0.0716042511468 ],
+    [ 0.2 ,  1 ,  0.105453784583 ],
+    [ 0.25 ,  1 ,  0.150762565352 ],
+    [ 0.3 ,  1 ,  0.210008281387 ],
+    [ 0.35 ,  1 ,  0.285365362973 ],
+    [ 0.4 ,  1 ,  0.379518775659 ],
+    [ 0.473 ,  1 ,  0.54478702555 ],
+    [ 0.473 ,  -1 ,  0.547153545724 ],
+    [ 0.4 ,  -1 ,  0.432316804894 ],
+    [ 0.35 ,  -1 ,  0.354766238866 ],
+    [ 0.3 ,  -1 ,  0.286613797492 ],
+    [ 0.25 ,  -1 ,  0.231818661618 ],
+    [ 0.2 ,  -1 ,  0.183608643566 ],
+    [ 0.15 ,  -1 ,  0.13934314172 ],
+    [ 0.1 ,  -1 ,  0.0974983134916 ],
+    [ 0.05 ,  -1 ,  0.0580951170398 ],
+    [ 0.0 ,  -1 ,  0.0178260739169 ],
+    [ -0.05 ,  -1 ,  -0.0284506730363 ],
+    [ -0.1 ,  -1 ,  -0.0767715103415 ],
+    [ -0.15 ,  -1 ,  -0.126002461059 ],
+    [ -0.2 ,  -1 ,  -0.189143943783 ],
+    [ -0.25 ,  -1 ,  -0.279117596195 ],
+    [ -0.3 ,  -1 ,  -0.403615421853 ],
+    [ -0.35 ,  -1 ,  -0.557567899648 ],
+    [ -0.4 ,  -1 ,  -0.741932592896 ],
+    [ -0.428 ,  -1 ,  -0.853980950735 ],
+    [ -0.428 ,  1 ,  -0.856116380487 ],
+    [ -0.4 ,  1 ,  -0.758257259313 ],
+    [ -0.35 ,  1 ,  -0.567389007323 ],
+    [ -0.3 ,  1 ,  -0.406031747523 ],
+    [ -0.25 ,  1 ,  -0.265960837541 ],
+    [ -0.2 ,  1 ,  -0.168469540759 ],
+    [ -0.15 ,  1 ,  -0.101001232934 ],
+    [ -0.1 ,  1 ,  -0.0469169717312 ],
+    [ -0.05 ,  1 ,  -0.00825189012041 ],
+    [ -0.01 ,  1 ,  0.00942419878596 ],
+    ]
+end
 
 function CV_get_error(CV_U, CV_I, nodes)
     #res_values = []
@@ -419,9 +502,11 @@ function CV_get_error(CV_U, CV_I, nodes)
         append!(I_orig,i[3])
     end
     PyPlot.plot(U_orig,I_orig)
+    PyPlot.grid()
     
     subplot(212)
     PyPlot.plot(CV_U,CV_I)
+    PyPlot.grid()
     
     PyPlot.draw()
     PyPlot.show()
@@ -433,7 +518,7 @@ end
 ###########################################################
 ###########################################################
 
-function run_new(;hexp=-9, verbose=false ,pyplot=false, width=10.0e-9, voltametry=false, dlcap=false, save_files=false, voltrate=0.005, phi0=0.0, bound=0.55, sample=50, A0_in=-10, R0_in=10, DGA_in=-0.0, DGR_in=0.1, beta_in=0.5, A_in = 0.1, dtstep_in=1.0e-6, fitting=false, print_bool=false )
+function run_new(;hexp=-9, verbose=false ,pyplot=false, width=10.0e-9, voltametry=false, dlcap=false, save_files=false, voltrate=0.005, phi0=0.0, upp_bound=0.5, low_bound=-0.5, sample=50, prms_in=[-10, 10, -0.0, 0.1, 0.5, 0.1], dtstep_in=1.0e-6, fitting=false, print_bool=false )
 
     # A0_in \in [-6, 6]
     # R0_in \in [-6, 6]
@@ -473,19 +558,19 @@ function run_new(;hexp=-9, verbose=false ,pyplot=false, width=10.0e-9, voltametr
     parameters=YSZParameters()
     # for parametric study
     eV = parameters.e0   # electronvolt [J] = charge of electron * 1[V]
-    parameters.A0 = 10.0^A0_in      # [1 / s]
-    parameters.R0 = 10.0^R0_in      # [1 / m^2 s]
+    parameters.A0 = 10.0^prms_in[1]      # [1 / s]
+    parameters.R0 = 10.0^prms_in[2]      # [1 / m^2 s]
     if dlcap
         parameters.R0 = 0
         println("dlcap > R0= ",parameters.R0)
     end
-    parameters.DGA = DGA_in * eV    # [J]
-    parameters.DGR = DGR_in * eV    # [J]
+    parameters.DGA = prms_in[3] * eV    # [J]
+    parameters.DGR = prms_in[4] * eV    # [J]
     
     #parameters.DGR = get_DGR_electroneutral(parameters)
     
-    parameters.beta = beta_in       # [1]
-    parameters.A = 10.0^A_in        # [1]
+    parameters.beta = prms_in[5]       # [1]
+    parameters.A = 10.0^prms_in[6]        # [1]
     
     #
     parameters.storage=storage!
@@ -541,8 +626,8 @@ function run_new(;hexp=-9, verbose=false ,pyplot=false, width=10.0e-9, voltametr
     #control.tol_absolute=1.0e-4
     #control.max_iterations=3
     control.max_lureuse=0
-    control.damp_initial=0.000001
-    control.damp_growth=2
+    control.damp_initial=0.001
+    control.damp_growth=1.5
     time=0.0
     if (!voltametry)
         println("---------- testsing branch ------------")
@@ -649,7 +734,7 @@ function run_new(;hexp=-9, verbose=false ,pyplot=false, width=10.0e-9, voltametr
         cv_cycles = 1
         relaxation_length = 1    # how many "samples" should relaxation last
         relax_counter = 0
-        istep_cv_start = 0
+        istep_cv_start = -1
         time_range = zeros(0)  # [s]
 
         if print_bool
@@ -667,7 +752,7 @@ function run_new(;hexp=-9, verbose=false ,pyplot=false, width=10.0e-9, voltametr
         
         
         
-        tstep=bound/voltrate/sample   
+        tstep=((upp_bound-low_bound)/2)/voltrate/sample   
         if print_bool
             @printf("tstep %g ... dtstep %g\n",tstep, dtstep)
         end
@@ -713,7 +798,7 @@ function run_new(;hexp=-9, verbose=false ,pyplot=false, width=10.0e-9, voltametr
                     print("cv ~~~ direction switch: ")
                 end
             end                            
-            if state=="cv_is_on" && (phi <= -bound+phi0 || phi >= bound+phi0)
+            if state=="cv_is_on" && (phi <= low_bound-0.00000001+phi0 || phi >= upp_bound+0.00000001+phi0)
                 dir*=(-1)
                 # uncomment next line if phi should NOT go slightly beyond limits
                 #phi+=2*voltrate*dir*tstep
@@ -780,8 +865,10 @@ function run_new(;hexp=-9, verbose=false ,pyplot=false, width=10.0e-9, voltametr
             Ir = Ir*AreaEllyt
             #
             
+            
+            #@printf("t = %g     U = %g   state = %s  reac = %g  \n", istep*tstep, phi, state, Ir)
+            
             if verbose
-                #@printf("t = %g     U = %g   state = %s  reac = %g  \n", istep*tstep, phi, state, Ir)
                 #debug(parameters,U, U_bound)
             
             end
@@ -867,11 +954,24 @@ function run_new(;hexp=-9, verbose=false ,pyplot=false, width=10.0e-9, voltametr
                 PyPlot.legend(loc="best")
                 PyPlot.grid()
                 
-                #subplot(414)
-                #plot(time_range, MY_Iflux_range, label = "I_ion-flux")
-                #plot(time_range, MY_Itot_range, label = "I_tot")
-                #PyPlot.legend(loc = "best")
-                #PyPlot.grid()
+                if istep_cv_start > -1
+                    
+                    nodes = check_nodes_short()
+                    U_orig = zeros(0)
+                    I_orig = zeros(0)
+                    for i in nodes
+                        append!(U_orig,i[1])
+                        append!(I_orig,i[3])
+                    end
+                
+                    subplot(414)
+                    plot(phi_range[istep_cv_start:end].-phi0, (Is_range + Ib_range + r_range + Ibb_range)[istep_cv_start:end] ,label="sim")
+                    plot(U_orig, I_orig ,label="exp")
+                    PyPlot.xlabel("E (V)")
+                    PyPlot.ylabel("I (A)")
+                    PyPlot.legend(loc="best")
+                    PyPlot.grid()
+                end
                 
                 pause(1.0e-10)
             end
@@ -912,10 +1012,10 @@ function run_new(;hexp=-9, verbose=false ,pyplot=false, width=10.0e-9, voltametr
 		
 		subplot(222)
 		if dlcap
-		    cbl, cs = direct_capacitance(parameters, collect(float(-bound):0.001:float(bound)))
-		    plot(collect(float(-bound):0.001:float(bound)), (cbl+cs), label="tot CG") 
-		    plot(collect(float(-bound):0.001:float(bound)), (cbl), label="b CG") 
-		    plot(collect(float(-bound):0.001:float(bound)), (cs), label="s CG") 
+		    cbl, cs = direct_capacitance(parameters, collect(float(low_bound):0.001:float(upp_bound)))
+		    plot(collect(float(low_bound):0.001:float(upp_bound)), (cbl+cs), label="tot CG") 
+		    plot(collect(float(low_bound):0.001:float(upp_bound)), (cbl), label="b CG") 
+		    plot(collect(float(low_bound):0.001:float(upp_bound)), (cs), label="s CG") 
 		    plot(phi_range[istep_cv_start:end].-phi0, ((Is_range + Ib_range + r_range + Ibb_range)[istep_cv_start:end])/voltrate ,label="rescaled total current")# rescaled by voltrate
 		else
 		    plot(phi_range[istep_cv_start:end].-phi0, ((Is_range + Ib_range + r_range + Ibb_range)[istep_cv_start:end]) ,label="total current")
@@ -954,8 +1054,8 @@ function run_new(;hexp=-9, verbose=false ,pyplot=false, width=10.0e-9, voltametr
 		        end
 		    end
                     end
-		parn = ["verbose" ,"pyplot", "width", "voltametry", "voltrate", "bound", "sample", "phi0"]
-		parv =[verbose ,pyplot, width, voltametry, voltrate, bound, sample, @sprintf("%.6g",phi0)]
+		parn = ["verbose" ,"pyplot", "width", "voltametry", "voltrate", "low_bound", "upp_bound", "sample", "phi0"]
+		parv =[verbose ,pyplot, width, voltametry, voltrate, low_bound, upp_bound, sample, @sprintf("%.6g",phi0)]
 		for ii in 1:length(parn)
 			linestring=string(parn[ii],": ",parv[ii])
 		        PyPlot.text(0.01+shift, 0.95+height, linestring, fontproperties="monospace")
@@ -972,12 +1072,12 @@ function run_new(;hexp=-9, verbose=false ,pyplot=false, width=10.0e-9, voltametr
 
         if save_files
             out_name=string(
-            "A0",@sprintf("%.0f",A0_in),
-            "_GA",@sprintf("%.0f",DGA_in),
-            "_GR",@sprintf("%.0f",DGR_in),
-            "_R0",@sprintf("%.0f",R0_in),
-            "_be",@sprintf("%.0f",beta_in),
-            "_A",@sprintf("%.0f",A_in),
+            "A0",@sprintf("%.0f",prms_in[1]),
+            "_R0",@sprintf("%.0f",prms_in[2]),
+            "_GA",@sprintf("%.0f",prms_in[3]),
+            "_GR",@sprintf("%.0f",prms_in[4]),
+            "_be",@sprintf("%.0f",prms_in[5]),
+            "_A",@sprintf("%.0f",prms_in[6]),
             "_vrate",@sprintf("%.2g",voltrate),
             )
 
@@ -994,7 +1094,9 @@ function run_new(;hexp=-9, verbose=false ,pyplot=false, width=10.0e-9, voltametr
         return CV_get_error(
             phi_range[istep_cv_start:end].-phi0,
             ((Is_range + Ib_range + r_range + Ibb_range)[istep_cv_start:end]),
-            check_nodes_short())
+            #check_nodes_short()
+            check_nodes_whole()
+            )
     end
 end
 
@@ -1045,26 +1147,86 @@ function my_optimize()
 # 	#[1 - x[1]]
 	[1]
     end
+    function prepare_prms(mask, x0, x)
+        prms = zeros(0)
+        xi = 1
+        for i in collect(1 : 1 :length(mask))
+            if convert(Bool,mask[i])
+                append!(prms, x[xi])
+                xi += 1
+            else
+                append!(prms, x0[i])
+            end
+        end
+        return prms
+    end
     function to_optimize(x)
-        print(" >> x ",x)
-        #a = run_new(print_bool=false, fitting=true, voltametry=true, pyplot=false, voltrate=0.005, sample=20, bound=0.4, 
-        #    A0_in=x[1], R0_in=x[2], DGA_in=-1.0, DGR_in=x[3], beta_in=0.4, A_in=1.7)
-        err = run_new(print_bool=false, fitting=true, voltametry=true, pyplot=false, voltrate=0.005, sample=8, bound=0.41, 
-            A0_in=x[1], R0_in=x[2], DGA_in=x[3], DGR_in=x[4], beta_in=x[5], A_in=x[6])
-
-        println(" >> a =", err)
-        [a]
+        #err = run_new(print_bool=false, fitting=true, voltametry=true, pyplot=false, voltrate=0.005, sample=8, bound=0.41, 
+        #    prms_in=x)
+        prms = prepare_prms(mask, x0, x)
+        print(" >> mask = ",mask)
+        print(" || prms = ",prms)
+        
+        err = run_new(print_bool=false, fitting=true, voltametry=true, pyplot=false, voltrate=0.005, sample=20, upp_bound=0.474, low_bound=-0.429, 
+            prms_in=prms)
+        
+        println(" || err =", err)
+        return [err]
     end
     #x0 = zeros(2)
     #optimize(rosenbrock, x0, LevenbergMarquardt())
     
-    #x0 = [2.3, 10.0, -0.5]
-    #x0 = [2.29112, 9.44993, -1.0, -0.509997, 0.4, 1.7]
-    x0 = [3.29112, 9.44993, -1.0, -0.509997, 0.6, 1.8]
-    x0 = [3.11007, -10.0, 0.50000, -0.598513, 0.724081, 1.17081]
-    x0 = [3.1149, -9.59917, 0.498534, -0.597552, 0.724949, 1.17139]
-    optimize(to_optimize, x0, lower=[-10, -10, -1.2, -0.6, 0.1, 0.1], upper=[6, 11, 0.5, 0.5, 0.9, 2], f_tol=1.0e-14, g_tol=1.0e-14, LevenbergMarquardt())
-    #optimize(to_optimize, x0, Dogleg())
+    lower_bounds = [-20, -20, -1.2, -1.2, 0.1, 0.1]
+    upper_bounds = [15, 22, 0.2, 0.2, 0.9, 1.0]
+    
+    #x0 = [3.1149, -9.59917, 0.498534, -0.597552, 0.724949, 1.17139]
+    #x0 = [3.40882, -4.1195, 0.0, 0.0, 0.5, 1.17139]
+    #x0 = [4.42991, 19.03254, 0.0, 0.0, 0.5, 0.301]
+    #x0 = [4.42991, 20.03254, 0.0, 0.0, 0.5, 0.151]
+    
+    #x0 = [9.00137, 20.1747, 0.5, 0.0, 0.5, 0.206002]
+    x0 = [2.3, 19.5, -1, -1, 0.6, 1.2]
+    #x0 = [2.32407, 18.4458, -1.0, -1.0, 0.769217, 1.03349]
+    #x0 = [2.34223, 18.4039, -1.0, -1.0, 0.72743, 0.95021] # quite good fit <<<<<<<<<<
+    #x0 = [2.34223, 20.8039, -1.0, -1.0, 0.52743, 0.25021] # hand fit <<< usable
+    #x0 = [2.74223, 19.7039, -1.0, -1.0, 0.58, 0.25021]
+    #x0 = [2.44223, 20.5039, -1.0, -1.0, 0.61, 0.25021] # not bad :)) <<<<<<<<<
+    
+    # err metric <- check_nodes_long()
+    x0 = [2.54223, 20.5039, -1.0000000, -1.000000, 0.500000, 0.250210]  # by hand
+    x0 = [2.54223, 20.5039, -1.0000000, -1.000000, 0.632507, 0.250210] # fitted beta << GOOD << err =0.006814132871406775
+    x0 = [2.54223, 20.5039, -1.0000000, -1.000000, 0.632507, 0.253287] # fitted A  << err =0.006807257238292433
+    x0 = [2.54223, 20.5033, -1.0000000, -1.000000, 0.632507, 0.253287] # fitted R0 << err =0.0068072339219288356
+    x0 = [2.55263, 20.5033, -1.0000000, -1.000000, 0.632507, 0.253287] # fitted A0 << err =0.006745444782481952
+    x0 = [2.58082, 20.4100, -1.0000000, -1.000000, 0.632507, 0.253287] # fitted A0, R0 << err =0.006574359568544145
+    x0 = [2.58082, 20.4100, -0.0905748, -0.708014, 0.632507, 0.253287] # fitted DGA, DGR << err =0.006573859072513787
+    x0 = [2.70077, 20.5264, -0.0905748, -0.708014, 0.598817, 0.143269] # fittet 110011 << err =0.005685020802399199
+    
+    # err metric <- check_nodes_whole()
+    x0 = [2.74851, 20.5631, -0.0905748, -0.708014, 0.605159, 0.105409] # fitting... 110011 << err =0.0054800474768966585
+    x0 = [2.73650, 20.6063, -0.0905748, -0.708014, 0.607443, 0.100000] # fitting... 110011 << err =0.005415825589421705
+    x0 = [2.73645, 20.6064, -0.0905748, -0.708014, 0.607457, 0.100000] # fitted 110011 <<  err =0.0054158249335496105
+    x0 = [2.736451985137371, 20.606423236896422, -0.0905748, -0.708014, 0.6074566741435283, 0.1]
+    x0 = [2.736451985137371, 20.606423236896422, -0.0905748, -0.808014, 0.6074566741435283, 0.1]
+    
+    mask = [0, 0, 1, 1, 0, 0] # determining, which parametr should be fitted
+    
+    x0M = zeros(0)
+    lowM = zeros(0)
+    uppM = zeros(0)
+    for i in collect(1 : 1 : length(mask))
+        if convert(Bool,mask[i])
+            append!(x0M, x0[i])
+            append!(lowM, lower_bounds[i])
+            append!(uppM, upper_bounds[i])
+        end
+    end
+    
+    
+    to_optimize(x0M)
+    #println(optimize(to_optimize, x0M, lower=lowM, upper=uppM, Δ=1000, f_tol=1.0e-14, g_tol=1.0e-14, LevenbergMarquardt()))
+    #optimize(to_optimize, x0M, Dogleg())
+    return
 end
 
 
