@@ -493,20 +493,24 @@ function CV_get_error(CV_U, CV_I, nodes)
     end
     
     PyPlot.clf()
-    subplot(211)
-    PyPlot.plot(CV_U,CV_I)
+    #subplot(211)
+    PyPlot.figure(figsize=(5,4))
+    PyPlot.plot(CV_U,CV_I,label="sim")
     U_orig = zeros(0)
     I_orig = zeros(0)
     for i in nodes
         append!(U_orig,i[1])
         append!(I_orig,i[3])
     end
-    PyPlot.plot(U_orig,I_orig)
+    PyPlot.plot(U_orig,I_orig,label="exp")
     PyPlot.grid()
+    PyPlot.xlabel("nu (V)")
+    PyPlot.ylabel("I (A)")
+    PyPlot.legend(loc="best")
     
-    subplot(212)
-    PyPlot.plot(CV_U,CV_I)
-    PyPlot.grid()
+    #subplot(212)
+    #PyPlot.plot(CV_U,CV_I)
+    #PyPlot.grid()
     
     PyPlot.draw()
     PyPlot.show()
@@ -922,7 +926,7 @@ function run_new(;hexp=-9, verbose=false ,pyplot=false, width=10.0e-9, voltametr
             
             ##### my plotting                  
             if pyplot && istep%10 == 0
-                PyPlot.clf()
+                PyPlot.clf()                
                 subplot(411)
                 plot((10^9)*X[:],U_bulk[iphi,:],label="phi (V)")
                 plot((10^9)*X[:],U_bulk[iy,:],label="y")
@@ -956,7 +960,7 @@ function run_new(;hexp=-9, verbose=false ,pyplot=false, width=10.0e-9, voltametr
                 
                 if istep_cv_start > -1
                     
-                    nodes = check_nodes_short()
+                    nodes = check_nodes_whole()
                     U_orig = zeros(0)
                     I_orig = zeros(0)
                     for i in nodes
@@ -1167,7 +1171,7 @@ function my_optimize()
         print(" >> mask = ",mask)
         print(" || prms = ",prms)
         
-        err = run_new(print_bool=false, fitting=true, voltametry=true, pyplot=false, voltrate=0.005, sample=20, upp_bound=0.474, low_bound=-0.429, 
+        err = run_new(print_bool=false, fitting=true, voltametry=true, pyplot=true, voltrate=0.005, sample=50, upp_bound=0.474, low_bound=-0.429, 
             prms_in=prms)
         
         println(" || err =", err)
@@ -1207,7 +1211,7 @@ function my_optimize()
     x0 = [2.73650, 20.6063, -0.0905748, -0.708014, 0.607443, 0.100000] # fitting... 110011 << err =0.005415825589421705
     x0 = [2.73645, 20.6064, -0.0905748, -0.708014, 0.607457, 0.100000] # fitted 110011 <<  err =0.0054158249335496105
     x0 = [2.736451985137371, 20.606423236896422, -0.0905748, -0.708014, 0.6074566741435283, 0.1]
-    x0 = [2.736451985137371, 20.606423236896422, -0.0905748, -0.808014, 0.6074566741435283, 0.1]
+    x0 = [2.736451985137371, 20.606423236896422, -0.0905748, -0.708014, 0.6074566741435283, 0.1]
     
     mask = [0, 0, 1, 1, 0, 0] # determining, which parametr should be fitted
     
@@ -1222,7 +1226,7 @@ function my_optimize()
         end
     end
     
-    
+    PyPlot.close()
     to_optimize(x0M)
     #println(optimize(to_optimize, x0M, lower=lowM, upper=uppM, Δ=1000, f_tol=1.0e-14, g_tol=1.0e-14, LevenbergMarquardt()))
     #optimize(to_optimize, x0M, Dogleg())
