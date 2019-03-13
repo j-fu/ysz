@@ -1,4 +1,4 @@
-"""
+    """
 YSZ example cloned from iliq.jl of the TwoPointFluxFVM package.
 """
 
@@ -75,7 +75,9 @@ function YSZParameters(this)
     this.A=2.
     
     
-    this.DD=1.5658146540360312e-11  # fitted to conductivity 0.063 S/cm ... TODO reference
+    #this.DD=1.5658146540360312e-11  # fitted to conductivity 0.063 S/cm ... TODO reference
+    #this.DD=8.5658146540360312e-10  # random value  <<<< GOOOD hand-guess
+    this.DD=9.5658146540360312e-10  # random value
     this.pO=1.                      # O2 atmosphere 
     this.T=1073                     
     this.nu=0.9                     # assumption
@@ -408,47 +410,99 @@ function check_nodes_long()
     ]
 end
 
+function check_nodes_whole_IRcorr()
+    return [
+    [ 0.01 ,  1 ,  0.0150491542661 ],
+    [ 0.05 ,  1 ,  0.0268974898822 ],
+    [ 0.1 ,  1 ,  0.0442500369024 ],
+    [ 0.15 ,  1 ,  0.0664720034828 ],
+    [ 0.2 ,  1 ,  0.0956120904493 ],
+    [ 0.25 ,  1 ,  0.132673892311 ],
+    [ 0.3 ,  1 ,  0.179171966986 ],
+    [ 0.35 ,  1 ,  0.234708250962 ],
+    [ 0.4 ,  1 ,  0.300126956062 ],
+    [ 0.473 ,  1 ,  0.413006128957 ],
+    [ 0.473 ,  -1 ,  0.45061070576 ],
+    [ 0.4 ,  -1 ,  0.356226587042 ],
+    [ 0.35 ,  -1 ,  0.297462116657 ],
+    [ 0.3 ,  -1 ,  0.248312046157 ],
+    [ 0.25 ,  -1 ,  0.204239402861 ],
+    [ 0.2 ,  -1 ,  0.163227207933 ],
+    [ 0.15 ,  -1 ,  0.124400778752 ],
+    [ 0.1 ,  -1 ,  0.0878372675004 ],
+    [ 0.05 ,  -1 ,  0.052540481894 ],
+    [ 0.0 ,  -1 ,  0.0159355606336 ],
+    [ -0.05 ,  -1 ,  -0.0251917337437 ],
+    [ -0.1 ,  -1 ,  -0.0680737763948 ],
+    [ -0.15 ,  -1 ,  -0.110758965865 ],
+    [ -0.2 ,  -1 ,  -0.159671398554 ],
+    [ -0.25 ,  -1 ,  -0.22065905286 ],
+    [ -0.3 ,  -1 ,  -0.29857114029 ],
+    [ -0.35 ,  -1 ,  -0.392319818746 ],
+    [ -0.4 ,  -1 ,  -0.498452273921 ],
+    [ -0.428 ,  -1 ,  -0.560535107789 ],
+    [ -0.428 ,  1 ,  -0.566981785728 ],
+    [ -0.4 ,  1 ,  -0.507237810513 ],
+    [ -0.35 ,  1 ,  -0.393025970981 ],
+    [ -0.3 ,  1 ,  -0.290811538942 ],
+    [ -0.25 ,  1 ,  -0.205435404638 ],
+    [ -0.2 ,  1 ,  -0.140370670431 ],
+    [ -0.15 ,  1 ,  -0.0869515426903 ],
+    [ -0.1 ,  1 ,  -0.0415431908515 ],
+    [ -0.05 ,  1 ,  -0.00766406292301 ],
+    [ -0.01 ,  1 ,  0.00898350750788 ],
+    ]
+end
+
 function check_nodes_whole()
     return [
-    [ 0.01 ,  1 ,  0.0156863321679 ],
-    [ 0.05 ,  1 ,  0.0281101995946 ],
-    [ 0.1 ,  1 ,  0.0468005909422 ],
-    [ 0.15 ,  1 ,  0.0716042511468 ],
-    [ 0.2 ,  1 ,  0.105453784583 ],
-    [ 0.25 ,  1 ,  0.150762565352 ],
-    [ 0.3 ,  1 ,  0.210008281387 ],
-    [ 0.35 ,  1 ,  0.285365362973 ],
-    [ 0.4 ,  1 ,  0.379518775659 ],
-    [ 0.473 ,  1 ,  0.54478702555 ],
-    [ 0.473 ,  -1 ,  0.547153545724 ],
-    [ 0.4 ,  -1 ,  0.432316804894 ],
-    [ 0.35 ,  -1 ,  0.354766238866 ],
-    [ 0.3 ,  -1 ,  0.286613797492 ],
-    [ 0.25 ,  -1 ,  0.231818661618 ],
-    [ 0.2 ,  -1 ,  0.183608643566 ],
-    [ 0.15 ,  -1 ,  0.13934314172 ],
-    [ 0.1 ,  -1 ,  0.0974983134916 ],
-    [ 0.05 ,  -1 ,  0.0580951170398 ],
-    [ 0.0 ,  -1 ,  0.0178260739169 ],
-    [ -0.05 ,  -1 ,  -0.0284506730363 ],
-    [ -0.1 ,  -1 ,  -0.0767715103415 ],
-    [ -0.15 ,  -1 ,  -0.126002461059 ],
-    [ -0.2 ,  -1 ,  -0.189143943783 ],
-    [ -0.25 ,  -1 ,  -0.279117596195 ],
-    [ -0.3 ,  -1 ,  -0.403615421853 ],
-    [ -0.35 ,  -1 ,  -0.557567899648 ],
-    [ -0.4 ,  -1 ,  -0.741932592896 ],
-    [ -0.428 ,  -1 ,  -0.853980950735 ],
-    [ -0.428 ,  1 ,  -0.856116380487 ],
-    [ -0.4 ,  1 ,  -0.758257259313 ],
-    [ -0.35 ,  1 ,  -0.567389007323 ],
-    [ -0.3 ,  1 ,  -0.406031747523 ],
-    [ -0.25 ,  1 ,  -0.265960837541 ],
-    [ -0.2 ,  1 ,  -0.168469540759 ],
-    [ -0.15 ,  1 ,  -0.101001232934 ],
-    [ -0.1 ,  1 ,  -0.0469169717312 ],
-    [ -0.05 ,  1 ,  -0.00825189012041 ],
-    [ -0.01 ,  1 ,  0.00942419878596 ],
+    [ 0.01 ,  1 ,  0.0150491542661 ],
+    [ 0.05 ,  1 ,  0.0268974898822 ],
+    [ 0.1 ,  1 ,  0.0442500369024 ],
+    [ 0.15 ,  1 ,  0.0664720034828 ],
+    [ 0.2 ,  1 ,  0.0956120904493 ],
+    [ 0.25 ,  1 ,  0.132673892311 ],
+    [ 0.3 ,  1 ,  0.179171966986 ],
+    [ 0.35 ,  1 ,  0.234708250962 ],
+    [ 0.4 ,  1 ,  0.300126956062 ],
+    [ 0.45 ,  1 ,  0.375883444117 ],
+    [ 0.5 ,  1 ,  0.458309824876 ],
+    [ 0.55 ,  1 ,  0.548480431896 ],
+    [ 0.55 ,  -1 ,  0.548925634441 ],
+    [ 0.5 ,  -1 ,  0.488403386928 ],
+    [ 0.45 ,  -1 ,  0.41946584191 ],
+    [ 0.4 ,  -1 ,  0.356226587042 ],
+    [ 0.35 ,  -1 ,  0.297462116657 ],
+    [ 0.3 ,  -1 ,  0.248312046157 ],
+    [ 0.25 ,  -1 ,  0.204239402861 ],
+    [ 0.2 ,  -1 ,  0.163227207933 ],
+    [ 0.15 ,  -1 ,  0.124400778752 ],
+    [ 0.1 ,  -1 ,  0.0878372675004 ],
+    [ 0.05 ,  -1 ,  0.052540481894 ],
+    [ 0.0 ,  -1 ,  0.0159355606336 ],
+    [ -0.05 ,  -1 ,  -0.0251917337437 ],
+    [ -0.1 ,  -1 ,  -0.0680737763948 ],
+    [ -0.15 ,  -1 ,  -0.110758965865 ],
+    [ -0.2 ,  -1 ,  -0.159671398554 ],
+    [ -0.25 ,  -1 ,  -0.22065905286 ],
+    [ -0.3 ,  -1 ,  -0.29857114029 ],
+    [ -0.35 ,  -1 ,  -0.392319818746 ],
+    [ -0.4 ,  -1 ,  -0.498452273921 ],
+    [ -0.45 ,  -1 ,  -0.6116602738 ],
+    [ -0.5 ,  -1 ,  -0.736105820118 ],
+    [ -0.547 ,  -1 ,  -0.857567478585 ],
+    [ -0.547 ,  1 ,  -0.858335657811 ],
+    [ -0.5 ,  1 ,  -0.746960182353 ],
+    [ -0.45 ,  1 ,  -0.620437414239 ],
+    [ -0.4 ,  1 ,  -0.507237810513 ],
+    [ -0.35 ,  1 ,  -0.393025970981 ],
+    [ -0.3 ,  1 ,  -0.290811538942 ],
+    [ -0.25 ,  1 ,  -0.205435404638 ],
+    [ -0.2 ,  1 ,  -0.140370670431 ],
+    [ -0.15 ,  1 ,  -0.0869515426903 ],
+    [ -0.1 ,  1 ,  -0.0415431908515 ],
+    [ -0.05 ,  1 ,  -0.00766406292301 ],
+    [ -0.01 ,  1 ,  0.00898350750788 ],
     ]
 end
 
@@ -494,8 +548,8 @@ function CV_get_error(CV_U, CV_I, nodes)
     
     PyPlot.clf()
     #subplot(211)
-    PyPlot.figure(figsize=(5,4))
-    PyPlot.plot(CV_U,CV_I,label="sim")
+    PyPlot.figure(figsize=(5.3, 4))
+    PyPlot.plot(CV_U,CV_I, label="sim")
     U_orig = zeros(0)
     I_orig = zeros(0)
     for i in nodes
@@ -630,8 +684,8 @@ function run_new(;hexp=-9, verbose=false ,pyplot=false, width=10.0e-9, voltametr
     #control.tol_absolute=1.0e-4
     #control.max_iterations=3
     control.max_lureuse=0
-    control.damp_initial=0.001
-    control.damp_growth=1.5
+    control.damp_initial=1.0e-6
+    control.damp_growth=1.3
     time=0.0
     if (!voltametry)
         println("---------- testsing branch ------------")
@@ -925,40 +979,57 @@ function run_new(;hexp=-9, verbose=false ,pyplot=false, width=10.0e-9, voltametr
             
             
             ##### my plotting                  
+            num_subplots=1
+            ys_marker_size=4
+            PyPlot.subplots_adjust(hspace=0.3)
+            
             if pyplot && istep%10 == 0
-                PyPlot.clf()                
-                subplot(411)
-                plot((10^9)*X[:],U_bulk[iphi,:],label="phi (V)")
-                plot((10^9)*X[:],U_bulk[iy,:],label="y")
-                plot(0,U_bound[1,1],"go", markersize=3, label="y_s")
-                l_plot = 5.0
-                PyPlot.xlim(-0.01*l_plot, l_plot)
-                PyPlot.ylim(-0.5,1.1)
-                PyPlot.xlabel("x (nm)")
-                PyPlot.legend(loc="best")
-                PyPlot.grid()
                 
-                subplot(412)
+                PyPlot.clf() 
+                PyPlot.figure(figsize=(5,5))
                 
-                #plot((10^9)*X[:],U_bulk[1,:],label="phi (V)")
+                if num_subplots > 0
+                    subplot(num_subplots*100 + 11)
+                    plot((10^9)*X[:],U_bulk[iphi,:],label="phi (V)")
+                    plot((10^9)*X[:],U_bulk[iy,:],label="y")
+                    plot(0,U_bound[1,1],"go", markersize=ys_marker_size, label="y_s")
+                    l_plot = 5.0
+                    PyPlot.xlim(-0.01*l_plot, l_plot)
+                    PyPlot.ylim(-0.5,1.1)
+                    PyPlot.xlabel("x (nm)")
+                    PyPlot.legend(loc="best")
+                    PyPlot.grid()
+                end
                 
-                plot(time_range,phi_range_full,label="phi_S (V)")
-                plot(time_range,U0_range,label="y(0)")
-                plot(time_range,Ub_range,label="y_s")
-                PyPlot.legend(loc="best")
-                PyPlot.grid()
+                if num_subplots > 1
+                    subplot(num_subplots*100 + 12)
+                    plot((10^3)*X[:],U_bulk[iphi,:],label="phi (V)")
+                    plot((10^3)*X[:],U_bulk[iy,:],label="y")
+                    plot(0,U_bound[1,1],"go", markersize=ys_marker_size, label="y_s")
+                    l_plot = 5.0
+                    #PyPlot.xlim(-0.01*l_plot, l_plot)
+                    PyPlot.ylim(-0.5,1.1)
+                    PyPlot.xlabel("x (mm)")
+                    PyPlot.legend(loc="best")
+                    PyPlot.grid()
+                end
                 
-                subplot(413)
-                plot(time_range,Ib_range, label = "I_bulk")
-                plot(time_range,Ibb_range, label = "I_bulkgrad")
-                plot(time_range,Is_range, label = "I_surf")
-                plot(time_range,r_range, label = "I_reac")
-                PyPlot.ylabel("I (A)")
-                PyPlot.xlabel("t (s)")
-                PyPlot.legend(loc="best")
-                PyPlot.grid()
                 
-                if istep_cv_start > -1
+                if num_subplots > 2
+                    subplot(num_subplots*100 + 13)
+                    #plot((10^9)*X[:],U_bulk[1,:],label="phi (V)")
+                    plot(time_range,phi_range_full,label="phi_S (V)")
+                    plot(time_range,U0_range,label="y(0)")
+                    plot(time_range,Ub_range,label="y_s")
+                    PyPlot.xlabel("t (s)")
+                    PyPlot.legend(loc="best")
+                    PyPlot.grid()
+                end
+                
+                
+                
+                if false
+                #if istep_cv_start > -1
                     
                     nodes = check_nodes_whole()
                     U_orig = zeros(0)
@@ -968,11 +1039,12 @@ function run_new(;hexp=-9, verbose=false ,pyplot=false, width=10.0e-9, voltametr
                         append!(I_orig,i[3])
                     end
                 
-                    subplot(414)
+                    subplot(num_subplots*100 + 14)
                     plot(phi_range[istep_cv_start:end].-phi0, (Is_range + Ib_range + r_range + Ibb_range)[istep_cv_start:end] ,label="sim")
                     plot(U_orig, I_orig ,label="exp")
                     PyPlot.xlabel("E (V)")
                     PyPlot.ylabel("I (A)")
+                    PyPlot.xlabel("t (s)")
                     PyPlot.legend(loc="best")
                     PyPlot.grid()
                 end
@@ -1171,8 +1243,11 @@ function my_optimize()
         print(" >> mask = ",mask)
         print(" || prms = ",prms)
         
-        err = run_new(print_bool=false, fitting=true, voltametry=true, pyplot=true, voltrate=0.005, sample=50, upp_bound=0.474, low_bound=-0.429, 
-            prms_in=prms)
+        #err = run_new(print_bool=false, fitting=true, voltametry=true, pyplot=true, voltrate=0.005, sample=50, upp_bound=0.474, low_bound=-0.429, 
+        #    prms_in=prms)
+            
+        err = run_new(print_bool=false, fitting=true, voltametry=true, pyplot=true, voltrate=0.005, sample=70, upp_bound=0.55, low_bound=-0.548, 
+            prms_in=prms, width=0.45e-3)
         
         println(" || err =", err)
         return [err]
@@ -1211,7 +1286,7 @@ function my_optimize()
     x0 = [2.73650, 20.6063, -0.0905748, -0.708014, 0.607443, 0.100000] # fitting... 110011 << err =0.005415825589421705
     x0 = [2.73645, 20.6064, -0.0905748, -0.708014, 0.607457, 0.100000] # fitted 110011 <<  err =0.0054158249335496105
     x0 = [2.736451985137371, 20.606423236896422, -0.0905748, -0.708014, 0.6074566741435283, 0.1]
-    x0 = [2.736451985137371, 20.606423236896422, -0.0905748, -0.708014, 0.6074566741435283, 0.1]
+    #x0 = [6.736451985137371, 24.606423236896422, -0.0905748, -0.708014, 0.6074566741435283, 0.1]
     
     mask = [0, 0, 1, 1, 0, 0] # determining, which parametr should be fitted
     
