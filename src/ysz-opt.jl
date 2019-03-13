@@ -1068,23 +1068,41 @@ function run_new(;hexp=-9, verbose=false ,pyplot=false, width=10.0e-9, voltametr
         
         
 	if pyplot
+		cv_range = (istep_cv_start+1):length(phi_range)
+		
 		PyPlot.clf()
-		subplot(221)
+		PyPlot.figure(figsize=(5,5))
 		if dlcap
-		  plot(phi_range[istep_cv_start:end].-phi0,( Ib_range[istep_cv_start:end] )/voltrate,label="bulk")
-		  plot(phi_range[istep_cv_start:end].-phi0,( Ibb_range[istep_cv_start:end])/voltrate,label="bulk_grad")
-		  plot(phi_range[istep_cv_start:end].-phi0,( Is_range[istep_cv_start:end] )/voltrate,label="surf")
-		  plot(phi_range[istep_cv_start:end].-phi0,( r_range[istep_cv_start:end]  )/voltrate,label="reac")
+		  plot(phi_range[cv_range].-phi0,( Ib_range[cv_range] )/voltrate,"blue", label="bulk")
+		  #plot(phi_range[cv_range].-phi0,( Ibb_range[cv_range])/voltrate,label="bulk_grad")
+		  plot(phi_range[cv_range].-phi0,( Is_range[cv_range] )/voltrate,"green", label="surf")
+		  plot(phi_range[cv_range].-phi0,( r_range[cv_range]  )/voltrate,"red", label="reac")
 		else
-		  plot(phi_range[istep_cv_start:end].-phi0, Ib_range[istep_cv_start:end] ,label="bulk")
-		  plot(phi_range[istep_cv_start:end].-phi0, Ibb_range[istep_cv_start:end] ,label="bulk_grad")
-		  plot(phi_range[istep_cv_start:end].-phi0, Is_range[istep_cv_start:end] ,label="surf")
-		  plot(phi_range[istep_cv_start:end].-phi0, r_range[istep_cv_start:end] ,label="reac")
+		  plot(phi_range[cv_range].-phi0, Ib_range[cv_range] ,"blue", label="bulk")
+		  #plot(phi_range[cv_range].-phi0, Ibb_range[cv_range] ,label="bulk_grad")
+		  plot(phi_range[cv_range].-phi0, Is_range[cv_range] ,"green",label="surf")
+		  plot(phi_range[cv_range].-phi0, r_range[cv_range] ,"red",label="reac")
 		end
-		PyPlot.xlabel("E (V)")
-		PyPlot.ylabel("I (A)")
+		PyPlot.xlabel("nu (V)")
+		PyPlot.ylabel(L"Capacitance (F/m$^2$)")  
 		PyPlot.legend(loc="best")
+                    PyPlot.xlim(-0.5, 0.5)
+                    PyPlot.ylim(0, 5)
 		PyPlot.grid()
+		PyPlot.show()
+		PyPlot.pause(10)
+		
+		
+		PyPlot.clf()
+		plot(phi_range[cv_range].-phi0,( (Ib_range+Is_range+r_range)[cv_range]  )/voltrate,"brown", label="total")
+		PyPlot.xlabel("nu (V)")
+		PyPlot.ylabel(L"Capacitance (F/m$^2$)") 
+		PyPlot.legend(loc="best")
+                    PyPlot.xlim(-0.5, 0.5)
+                    PyPlot.ylim(0, 5)
+		PyPlot.grid()
+		PyPlot.show()
+		PyPlot.pause(10)
 		
 		subplot(222)
 		if dlcap
@@ -1092,9 +1110,9 @@ function run_new(;hexp=-9, verbose=false ,pyplot=false, width=10.0e-9, voltametr
 		    plot(collect(float(low_bound):0.001:float(upp_bound)), (cbl+cs), label="tot CG") 
 		    plot(collect(float(low_bound):0.001:float(upp_bound)), (cbl), label="b CG") 
 		    plot(collect(float(low_bound):0.001:float(upp_bound)), (cs), label="s CG") 
-		    plot(phi_range[istep_cv_start:end].-phi0, ((Is_range + Ib_range + r_range + Ibb_range)[istep_cv_start:end])/voltrate ,label="rescaled total current")# rescaled by voltrate
+		    plot(phi_range[cv_range].-phi0, ((Is_range + Ib_range + r_range + Ibb_range)[cv_range])/voltrate ,label="rescaled total current")# rescaled by voltrate
 		else
-		    plot(phi_range[istep_cv_start:end].-phi0, ((Is_range + Ib_range + r_range + Ibb_range)[istep_cv_start:end]) ,label="total current")
+		    plot(phi_range[cv_range].-phi0, ((Is_range + Ib_range + r_range + Ibb_range)[cv_range]) ,label="total current")
 		end
 		PyPlot.xlabel("E (V)")
 		PyPlot.legend(loc="best")
@@ -1246,7 +1264,7 @@ function my_optimize()
         #err = run_new(print_bool=false, fitting=true, voltametry=true, pyplot=true, voltrate=0.005, sample=50, upp_bound=0.474, low_bound=-0.429, 
         #    prms_in=prms)
             
-        err = run_new(print_bool=false, fitting=true, voltametry=true, pyplot=true, voltrate=0.5, sample=40, upp_bound=0.55, low_bound=-0.548, 
+        err = run_new(print_bool=false, fitting=true, voltametry=true, dlcap=true, pyplot=true, voltrate=0.001, sample=40, upp_bound=0.55, low_bound=-0.548, 
             prms_in=prms, width=0.45e-3)
         
         println(" || err =", err)
