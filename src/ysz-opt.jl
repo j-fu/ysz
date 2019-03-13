@@ -979,14 +979,14 @@ function run_new(;hexp=-9, verbose=false ,pyplot=false, width=10.0e-9, voltametr
             
             
             ##### my plotting                  
-            num_subplots=1
+            num_subplots=3
             ys_marker_size=4
             PyPlot.subplots_adjust(hspace=0.3)
             
             if pyplot && istep%10 == 0
                 
                 PyPlot.clf() 
-                PyPlot.figure(figsize=(5,5))
+                #PyPlot.figure(figsize=(5,5))
                 
                 if num_subplots > 0
                     subplot(num_subplots*100 + 11)
@@ -1246,7 +1246,7 @@ function my_optimize()
         #err = run_new(print_bool=false, fitting=true, voltametry=true, pyplot=true, voltrate=0.005, sample=50, upp_bound=0.474, low_bound=-0.429, 
         #    prms_in=prms)
             
-        err = run_new(print_bool=false, fitting=true, voltametry=true, pyplot=true, voltrate=0.005, sample=70, upp_bound=0.55, low_bound=-0.548, 
+        err = run_new(print_bool=false, fitting=true, voltametry=true, pyplot=true, voltrate=0.005, sample=40, upp_bound=0.55, low_bound=-0.548, 
             prms_in=prms, width=0.45e-3)
         
         println(" || err =", err)
@@ -1287,6 +1287,7 @@ function my_optimize()
     x0 = [2.73645, 20.6064, -0.0905748, -0.708014, 0.607457, 0.100000] # fitted 110011 <<  err =0.0054158249335496105
     x0 = [2.736451985137371, 20.606423236896422, -0.0905748, -0.708014, 0.6074566741435283, 0.1]
     #x0 = [6.736451985137371, 24.606423236896422, -0.0905748, -0.708014, 0.6074566741435283, 0.1]
+    x0 = [2.736451985137371, 20.606423236896422, -0.0905748, -0.1508014, 0.6074566741435283, 0.1]
     
     mask = [0, 0, 1, 1, 0, 0] # determining, which parametr should be fitted
     
