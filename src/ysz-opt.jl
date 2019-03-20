@@ -83,7 +83,7 @@ function YSZParameters(this)
     this.nu=0.9                     # assumption
     this.nus=0.9                    # assumption
     this.x_frac=0.08                # 8% YSZ
-    this.chi=27.e0                   # from relative permitivity e_r = 6 = (1 + \chi) ... TODO reference
+    this.chi=27.e0                  # from relative permitivity e_r = 6 = (1 + \chi) ... TODO reference
     this.m_par = 2                  
     this.ms_par = this.m_par        
     this.numax = (2+this.x_frac)/this.m_par/(1+this.x_frac)
@@ -101,6 +101,16 @@ function YSZParameters(this)
     return this
 end
 
+function YSZParameters_update(this)
+    this.ms_par = this.m_par        
+    this.numax = (2+this.x_frac)/this.m_par/(1+this.x_frac)
+    this.nusmax = (2+this.x_frac)/this.ms_par/(1+this.x_frac)   
+    
+    this.zL  = 4*(1-this.x_frac)/(1+this.x_frac) + 3*2*this.x_frac/(1+this.x_frac) - 2*this.m_par*this.nu
+    this.y0  = -this.zL/(this.zA*this.m_par*(1-this.nu))
+    this.ML  = (1-this.x_frac)/(1+this.x_frac)*this.mZr + 2*this.x_frac/(1+this.x_frac)*this.mY + this.m_par*this.nu*this.mO
+    return this
+end
 
 
 function printfields(this)
@@ -228,24 +238,34 @@ end
 
 function direct_capacitance(this::YSZParameters, domain)
     # Clemens' analytic solution
-    PHI = -domain#collect(-bound:0.001:bound) # PHI = phi_B-phi_S, so domain as phi_S goes with minus
+    PHI = domain
+    #PHI=collect(-1:0.01:1) # PHI = phi_B-phi_S, so domain as phi_S goes with minus
+    my_eps = 0.00000001
+    for i in collect(1:length(PHI))
+        if abs(PHI[i]) < my_eps
+            PHI[i]=my_eps
+        end
+    end
     #
-    yB = -this.zL/this.zA/this.m_par/(1-this.nu);
-    X  = yB/(1-yB)*exp.(this.zA*this.e0/this.kB/this.T*PHI)
+    #yB = -this.zL/this.zA/this.m_par/(1-this.nu);
+    yB = this.y0
+    X= yB/(1-yB)*exp.(.- this.zA*this.e0/this.kB/this.T*PHI)
     y  = X./(1.0.+X)
     #
     nF = this.e0/this.vL*(this.zL .+ this.zA*this.m_par*(1-this.nu)*y)
-    F  = sign.(PHI).*sqrt.(
+
+    
+    F  = - sign.(PHI).*sqrt.(
           2*this.e0/this.vL/this.eps0/(1.0+this.chi).*(
-            this.zL.*PHI .+ this.kB*this.T/this.e0*this.m_par*(1-this.nu)*log.(
+            .- this.zL.*PHI .+ this.kB*this.T/this.e0*this.m_par*(1-this.nu)*log.(
               (1-yB).*(X .+ 1.0)
              )
            )
          );
     #
-    Y  = yB/(1-yB)*exp.(this.DGA/this.kB/this.T .+ this.zA*this.e0/this.kB/this.T*PHI);
+    Y  = yB/(1-yB)*exp.(this.DGA/this.kB/this.T .- this.zA*this.e0/this.kB/this.T*PHI);
     #
-    CS = this.zA^2*this.e0^2/this.kB/this.T*this.ms_par/this.areaL*(1-this.nus)*Y./(1.0.+Y).^2;
+    CS = this.zA^2*this.e0^2/this.kB/this.T*this.ms_par/this.areaL*(1-this.nus)*Y./((1.0.+Y).^2);
     CBL  = nF./F;
     return CBL, CS, y
 end
@@ -576,7 +596,7 @@ end
 ###########################################################
 ###########################################################
 
-function run_new(;hexp=-9, verbose=false ,pyplot=false, width=10.0e-9, voltametry=false, dlcap=false, save_files=false, voltrate=0.005, phi0=0.0, upp_bound=0.5, low_bound=-0.5, sample=50, prms_in=[-10, 10, -0.0, 0.1, 0.5, 0.1], dtstep_in=1.0e-6, fitting=false, print_bool=false )
+function run_new(;hexp=-9, verbose=false ,pyplot=false, width=10.0e-9, voltametry=false, dlcap=false, save_files=false, voltrate=0.005, phi0=0.0, upp_bound=0.5, low_bound=-0.5, sample=50, prms_in=[-10, 10, -0.0, 0.1, 0.5, 0.1], dtstep_in=1.0e-6, fitting=false, print_bool=false, par_study_bool=false, nu_in=0.9 )
 
     # A0_in \in [-6, 6]
     # R0_in \in [-6, 6]
@@ -629,6 +649,10 @@ function run_new(;hexp=-9, verbose=false ,pyplot=false, width=10.0e-9, voltametr
     
     parameters.beta = prms_in[5]       # [1]
     parameters.A = 10.0^prms_in[6]        # [1]
+    
+    
+    parameters.nu = nu_in
+    parameters = YSZParameters_update(parameters)
     
     #
     parameters.storage=storage!
@@ -684,8 +708,8 @@ function run_new(;hexp=-9, verbose=false ,pyplot=false, width=10.0e-9, voltametr
     #control.tol_absolute=1.0e-4
     #control.max_iterations=3
     control.max_lureuse=0
-    control.damp_initial=1.0e-6
-    control.damp_growth=1.3
+    control.damp_initial=1.0e-5
+    control.damp_growth=1.9
     time=0.0
     if (!voltametry)
         println("---------- testsing branch ------------")
@@ -829,7 +853,8 @@ function run_new(;hexp=-9, verbose=false ,pyplot=false, width=10.0e-9, voltametr
         if pyplot
             PyPlot.close()
             PyPlot.ion()
-            PyPlot.figure(figsize=(10,8), )
+            #PyPlot.figure(figsize=(10,8), )
+            PyPlot.figure(figsize=(5,5))
         end
         
         state = "ramp"
@@ -979,14 +1004,14 @@ function run_new(;hexp=-9, verbose=false ,pyplot=false, width=10.0e-9, voltametr
             
             
             ##### my plotting                  
-            num_subplots=3
+            num_subplots=2
             ys_marker_size=4
             PyPlot.subplots_adjust(hspace=0.3)
             
             if pyplot && istep%10 == 0
                 
                 PyPlot.clf() 
-                #PyPlot.figure(figsize=(5,5))
+                
                 
                 if num_subplots > 0
                     subplot(num_subplots*100 + 11)
@@ -1073,10 +1098,10 @@ function run_new(;hexp=-9, verbose=false ,pyplot=false, width=10.0e-9, voltametr
 		PyPlot.clf()
 		PyPlot.figure(figsize=(5,5))
 		if dlcap
-		  plot(phi_range[cv_range].-phi0,( Ib_range[cv_range] )/voltrate,"blue", label="bulk")
-		  #plot(phi_range[cv_range].-phi0,( Ibb_range[cv_range])/voltrate,label="bulk_grad")
-		  plot(phi_range[cv_range].-phi0,( Is_range[cv_range] )/voltrate,"green", label="surf")
-		  plot(phi_range[cv_range].-phi0,( r_range[cv_range]  )/voltrate,"red", label="reac")
+		  #plot(phi_range[cv_range].-phi0,( Ib_range[cv_range] )/voltrate,"blue", label="bulk")
+		  ##plot(phi_range[cv_range].-phi0,( Ibb_range[cv_range])/voltrate,label="bulk_grad")
+		  #plot(phi_range[cv_range].-phi0,( Is_range[cv_range] )/voltrate,"green", label="surf")
+		  #plot(phi_range[cv_range].-phi0,( r_range[cv_range]  )/voltrate,"red", label="reac")
 		else
 		  plot(phi_range[cv_range].-phi0, Ib_range[cv_range] ,"blue", label="bulk")
 		  #plot(phi_range[cv_range].-phi0, Ibb_range[cv_range] ,label="bulk_grad")
@@ -1102,15 +1127,15 @@ function run_new(;hexp=-9, verbose=false ,pyplot=false, width=10.0e-9, voltametr
                     PyPlot.ylim(0, 5)
 		PyPlot.grid()
 		PyPlot.show()
-		PyPlot.pause(10)
+		#PyPlot.pause(10)
 		
 		subplot(222)
 		if dlcap
-		    cbl, cs = direct_capacitance(parameters, collect(float(low_bound):0.001:float(upp_bound)))
-		    plot(collect(float(low_bound):0.001:float(upp_bound)), (cbl+cs), label="tot CG") 
-		    plot(collect(float(low_bound):0.001:float(upp_bound)), (cbl), label="b CG") 
-		    plot(collect(float(low_bound):0.001:float(upp_bound)), (cs), label="s CG") 
-		    plot(phi_range[cv_range].-phi0, ((Is_range + Ib_range + r_range + Ibb_range)[cv_range])/voltrate ,label="rescaled total current")# rescaled by voltrate
+		    #cbl, cs = direct_capacitance(parameters, collect(float(low_bound):0.001:float(upp_bound)))
+		    #plot(collect(float(low_bound):0.001:float(upp_bound)), (cbl+cs), label="tot CG") 
+		    #plot(collect(float(low_bound):0.001:float(upp_bound)), (cbl), label="b CG") 
+		    #plot(collect(float(low_bound):0.001:float(upp_bound)), (cs), label="s CG") 
+		    #plot(phi_range[cv_range].-phi0, ((Is_range + Ib_range + r_range + Ibb_range)[cv_range])/voltrate ,label="rescaled total current")# rescaled by voltrate
 		else
 		    plot(phi_range[cv_range].-phi0, ((Is_range + Ib_range + r_range + Ibb_range)[cv_range]) ,label="total current")
 		end
@@ -1163,7 +1188,19 @@ function run_new(;hexp=-9, verbose=false ,pyplot=false, width=10.0e-9, voltametr
         #PyPlot.legend(loc="best")
         #PyPlot.grid()
 
+        
+        
 
+        if par_study_bool
+            cv_range = (istep_cv_start+1):length(phi_range)
+            cbl, cs = direct_capacitance(parameters, collect(float(low_bound):0.001:float(upp_bound)))
+            plot(collect(float(low_bound):0.001:float(upp_bound)), (cs + cbl), label="b CG")
+            plot(phi_range[cv_range].-phi0, ((Is_range + Ib_range + r_range + Ibb_range)[cv_range])/voltrate ,label="rescaled total current")# rescaled by voltrate
+            #plot(phi_range[cv_range].-phi0, (( Is_range )[cv_range])/voltrate ,label="rescaled total current")# rescaled by voltrate
+            PyPlot.legend(loc="best")
+        end
+
+        
         if save_files
             out_name=string(
             "A0",@sprintf("%.0f",prms_in[1]),
@@ -1233,7 +1270,12 @@ end
 
 
 
-
+function nu_iter()
+    for nu_in in [0.1, 0.5, 0.9]
+        run_new(print_bool=false, fitting=false, voltametry=true, dlcap=true, pyplot=false, voltrate=0.00001, sample=50, upp_bound=1, low_bound=-1, 
+            prms_in=[-2, 0, 0.2, -0.2, 0.6074566741435283, 0.1], width=1e-8, nu_in=nu_in, par_study_bool=true)
+    end
+end
 
 function my_optimize()
     function rosenbrock(x)
