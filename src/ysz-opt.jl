@@ -102,7 +102,7 @@ function YSZParameters(this)
 end
 
 function YSZParameters_update(this)
-    this.ms_par = this.m_par        
+    this.areaL=(this.vL)^0.6666
     this.numax = (2+this.x_frac)/this.m_par/(1+this.x_frac)
     this.nusmax = (2+this.x_frac)/this.ms_par/(1+this.x_frac)   
     
@@ -238,9 +238,11 @@ end
 
 function direct_capacitance(this::YSZParameters, domain)
     # Clemens' analytic solution
+    #printfields(this)
+    
     PHI = domain
     #PHI=collect(-1:0.01:1) # PHI = phi_B-phi_S, so domain as phi_S goes with minus
-    my_eps = 0.00000001
+    my_eps = 0.001
     for i in collect(1:length(PHI))
         if abs(PHI[i]) < my_eps
             PHI[i]=my_eps
@@ -526,72 +528,76 @@ function check_nodes_whole()
     ]
 end
 
-function CV_get_error(CV_U, CV_I, nodes)
-    #res_values = []
-    Ux_values = []
-    err = 0
-    #println(CV_U)
-    #println(CV_I)
+function CV_get_error(CV_U, CV_I, nodes; opt_pyplot=false)
+        #res_values = []
+        Ux_values = []
+        err = 0
+        #println(CV_U)
+        #println(CV_I)
 
-    start_i = 1
-    for node in nodes
-        #print nodes
-        direction = 1
-        Ux = node[1]
-        xk = -1
-        i = start_i
-        while i < length(CV_U)-1
-            if direction*(CV_U[i+1] - CV_U[i]) < 0
-                #print "                          TED "
-                direction *= -1
+        start_i = 1
+        for node in nodes
+            #print nodes
+            direction = 1
+            Ux = node[1]
+            xk = -1
+            i = start_i
+            while i < length(CV_U)-1
+                if direction*(CV_U[i+1] - CV_U[i]) < 0
+                    #print "                          TED "
+                    direction *= -1
+                end
+                if is_between(Ux, CV_U[i], CV_U[i+1]) & (direction == node[2]) 
+                    xk = i
+                    start_i = i
+                    break
+                end
+                i += 1
             end
-            if is_between(Ux, CV_U[i], CV_U[i+1]) & (direction == node[2]) 
-                xk = i
-                start_i = i
-                break
+            
+            if xk == -1
+                print("Error: CV_get_values: Ux ",Ux," is not in CV_U")
+                #res_values.append(0.0)
+                continue
             end
-            i += 1
+            Ik = CV_I[xk]
+            Il = CV_I[xk+1]
+            Ix = Ik + ((Il - Ik)/(CV_U[xk+1] - CV_U[xk])) * (Ux - CV_U[xk])
+            
+            #res_values.append(float(Ix))        
+            err += (node[3] - float(Ix))^2
+        end
+
+        U_orig = zeros(0)
+        I_orig = zeros(0)
+        for i in nodes
+            append!(U_orig,i[1])
+            append!(I_orig,i[3])
         end
         
-        if xk == -1
-            print("Error: CV_get_values: Ux ",Ux," is not in CV_U")
-            #res_values.append(0.0)
-            continue
+        if opt_pyplot
+            #PyPlot.clf()
+            #subplot(211)
+            #PyPlot.figure(figsize=(5.3, 4))
+            PyPlot.plot(CV_U,CV_I, label="sim")
+
+            PyPlot.plot(U_orig,I_orig,label="exp")
+            PyPlot.grid()
+            PyPlot.xlabel("nu (V)")
+            PyPlot.ylabel("I (A)")
+            PyPlot.legend(loc="best")
+            
+            #subplot(212)
+            #PyPlot.plot(CV_U,CV_I)
+            #PyPlot.grid()
+            
+            PyPlot.draw()
+            PyPlot.show()
+            PyPlot.pause(1)
         end
-        Ik = CV_I[xk]
-        Il = CV_I[xk+1]
-        Ix = Ik + ((Il - Ik)/(CV_U[xk+1] - CV_U[xk])) * (Ux - CV_U[xk])
         
-        #res_values.append(float(Ix))        
-        err += (node[3] - float(Ix))^2
+        return sqrt(err) / convert(Float64, length(nodes))
     end
-    
-    PyPlot.clf()
-    #subplot(211)
-    PyPlot.figure(figsize=(5.3, 4))
-    PyPlot.plot(CV_U,CV_I, label="sim")
-    U_orig = zeros(0)
-    I_orig = zeros(0)
-    for i in nodes
-        append!(U_orig,i[1])
-        append!(I_orig,i[3])
-    end
-    PyPlot.plot(U_orig,I_orig,label="exp")
-    PyPlot.grid()
-    PyPlot.xlabel("nu (V)")
-    PyPlot.ylabel("I (A)")
-    PyPlot.legend(loc="best")
-    
-    #subplot(212)
-    #PyPlot.plot(CV_U,CV_I)
-    #PyPlot.grid()
-    
-    PyPlot.draw()
-    PyPlot.show()
-    
-    
-    return sqrt(err) / convert(Float64, length(nodes))
-end
 
 ###########################################################
 ###########################################################
@@ -1194,9 +1200,9 @@ function run_new(;hexp=-9, verbose=false ,pyplot=false, width=10.0e-9, voltametr
         if par_study_bool
             cv_range = (istep_cv_start+1):length(phi_range)
             cbl, cs = direct_capacitance(parameters, collect(float(low_bound):0.001:float(upp_bound)))
-            plot(collect(float(low_bound):0.001:float(upp_bound)), (cs + cbl), label="b CG")
-            plot(phi_range[cv_range].-phi0, ((Is_range + Ib_range + r_range + Ibb_range)[cv_range])/voltrate ,label="rescaled total current")# rescaled by voltrate
-            #plot(phi_range[cv_range].-phi0, (( Is_range )[cv_range])/voltrate ,label="rescaled total current")# rescaled by voltrate
+            plot(collect(float(low_bound):0.001:float(upp_bound)), (cs), label="b CG")
+            #plot(phi_range[cv_range].-phi0, ((Is_range + Ib_range + r_range + Ibb_range)[cv_range])/voltrate ,label="rescaled total current")# rescaled by voltrate
+            plot(phi_range[cv_range].-phi0, (( Is_range )[cv_range])/voltrate ,label="rescaled total current")# rescaled by voltrate
             PyPlot.legend(loc="best")
         end
 
@@ -1277,25 +1283,28 @@ function nu_iter()
     end
 end
 
+
+function prepare_prms(mask, x0, x)
+    prms = zeros(0)
+    xi = 1
+    for i in collect(1 : 1 :length(mask))
+        if convert(Bool,mask[i])
+            append!(prms, x[xi])
+            xi += 1
+        else
+            append!(prms, x0[i])
+        end
+    end
+    return prms
+end
+
 function my_optimize()
     function rosenbrock(x)
 	#[1 - x[1], 100 * (x[2]-x[1]^2)]
 # 	#[1 - x[1]]
 	[1]
     end
-    function prepare_prms(mask, x0, x)
-        prms = zeros(0)
-        xi = 1
-        for i in collect(1 : 1 :length(mask))
-            if convert(Bool,mask[i])
-                append!(prms, x[xi])
-                xi += 1
-            else
-                append!(prms, x0[i])
-            end
-        end
-        return prms
-    end
+
     function to_optimize(x)
         #err = run_new(print_bool=false, fitting=true, voltametry=true, pyplot=false, voltrate=0.005, sample=8, bound=0.41, 
         #    prms_in=x)
@@ -1372,6 +1381,192 @@ function my_optimize()
     return
 end
 
+function cap_nodes()
+    return [
+        [-0.24979,  1,  3.65607],
+        [-0.22393,  1,  3.92012],
+        [-0.2001,   1,  4.3482],
+        [-0.17515,  1,  5.11678],
+        [-0.15058,  1,  5.82232],
+        [-0.12518,  1,  6.33863],
+        [-0.10049,  1,  6.50182],
+        [-0.07534,  1,  6.41274],
+        [-0.0505,   1,  5.90745],
+        [-0.02553,  1,  4.8472],
+        [-0.00073,  1,  4.51849],
+        [0.02527,   1,  4.17713],
+        [0.05048,   1,  3.79796]
+    ]
+end
+
+function cap_optimize()
+
+
+    
+    
+
+    function to_optimize(x)
+        #println("x = ",x)
+        prms = prepare_prms(mask, x0, x)
+        print(" >> mask = ",mask)
+        print(" || prms = ",prms)
+        
+        parameters = YSZParameters()
+        
+        parameters.nu = prms[1]
+        parameters.nus = prms[2]
+        parameters.DGA = prms[3]*parameters.e0
+        parameters.m_par = prms[4]
+        parameters.ms_par = prms[5]
+        
+        parameters = YSZParameters_update(parameters)
+        
+        phi_range_cap = collect(-1:0.01:1)
+        cbl, cs = direct_capacitance(parameters,phi_range_cap)
+        
+        err = CV_get_error(phi_range_cap,cbl+cs, cap_nodes())
+        
+        #plot(phi_range_cap, cs, label="tot_capacitance")
+        #PyPlot.legend(loc="best")
+        #PyPlot.grid()
+        
+        
+        
+        println(" || err =", err)
+        return [err]
+    end
+    
+
+    
+    lower_bounds = [0, 0, -1.2, 0.1, 0.1]
+    upper_bounds = [1, 1, 1.0, 3, 3]
+    
+    mask = [1, 1, 1, 1, 1]
+    # x0 = [nu, nus, DGA, m, ms]
+    x0 = [0.1, 0.9, -0.5, 2, 2]
+    x0 = [0.1, 0.7, -0.2, 2, 0.5]
+    
+    x0M = zeros(0)
+    lowM = zeros(0)
+    uppM = zeros(0)
+    
+    for i in collect(1 : 1 : length(mask))
+        if convert(Bool,mask[i])
+            append!(x0M, x0[i])
+            append!(lowM, lower_bounds[i])
+            append!(uppM, upper_bounds[i])
+        end
+    end
+    
+    opt_pyplot=false
+    to_optimize(x0M)
+        
+    println(optimize(to_optimize, x0M, lower=lowM, upper=uppM, Δ=1000, x_tol = 1.0e-14, f_tol=1.0e-14, g_tol=1.0e-14, LevenbergMarquardt()))
+    return
+end
+
+function nu_anal_iter()
+    PyPlot.close()
+    iter_pyplot = false
+    err_min = 666
+    prms_min = [0, 0, 0, 0]
+    
+    
+    phi_range_cap = collect(-1:0.01:1)
+    cscdl_min = phi_range_cap
+    
+    laast = [0.47, 0.44, -0.2, 0.15, 60.0]
+    
+    #for i in collect(0.0: 0.01: 1.0)
+    for i in collect(0.8: 0.01: 1.0)
+        for j in collect(0.4 : 0.01: 0.8)
+            #println(" ... j ",j)   
+            for k in collect(0.05: 0.05: 0.2)
+                for l in collect(0.0: 0.05: 0.3)
+                    for cc in collect(120: 1 :180)
+                        parameters = YSZParameters()
+                        
+                        prms=[i,j,k,l,cc]
+                        #prms=[0.01, 0.42, -0.2, 0.25, 27.0]
+                        
+                        parameters.nu = prms[1]
+                        parameters.nus = prms[2]
+                        parameters.DGA = parameters.e0*prms[3]
+                        parameters.m_par = 2
+                        parameters.ms_par = prms[4]
+                        parameters.chi = prms[5]
+                        
+                        parameters.T = 848
+                        
+                        parameters = YSZParameters_update(parameters)
+                        
+                        
+                        cbl, cs = direct_capacitance(parameters,phi_range_cap)
+
+                        
+                        if iter_pyplot
+                            nodes = cap_nodes()
+                            U_orig = zeros(0)
+                            I_orig = zeros(0)
+                            for i in nodes
+                                append!(U_orig,i[1])
+                                append!(I_orig,i[3])
+                            end
+                            
+                            plot(phi_range_cap, cs + cbl, label=string("tot_capacitance ",i," ", j))
+                            plot(U_orig,I_orig, label="exp")
+                            PyPlot.legend(loc="best")
+                            PyPlot.grid()
+                            
+                            PyPlot.draw()
+                            PyPlot.show()
+                            
+                        end
+                        
+                        
+                        err = CV_get_error(phi_range_cap,cbl+cs, cap_nodes(), opt_pyplot=false)
+                        #println(i," ",j," ",err)
+                        if err < err_min
+                            err_min = err
+                            prms_min = prms
+                            cscdl_min =  cs + cbl
+                        end
+                    end
+                    
+                    if iter_pyplot
+                        PyPlot.pause(10)
+                        return
+                    end
+                end
+                
+            end
+        end
+        
+        println("i ",i, " >> err_min ",err_min, "      prms_min ",prms_min)
+  
+  
+        
+        nodes = cap_nodes()
+        U_orig = zeros(0)
+        I_orig = zeros(0)
+        for ii in nodes
+            append!(U_orig,ii[1])
+            append!(I_orig,ii[3])
+        end
+
+        plot(phi_range_cap, cscdl_min, label=string("tot_capacitance ",prms_min))
+        plot(U_orig,I_orig, label="exp")
+        PyPlot.legend(loc="best")
+        PyPlot.grid()
+
+        PyPlot.draw()
+        PyPlot.show()
+        PyPlot.pause(0.1)    
+    
+    end
+    println("err_min ",err_min, "      prms_min ",prms_min)
+    #PyPlot.pause(100)
+end
 
 # TODO //////////
 #   [x] fix the problem with non-zero current during relaxation
