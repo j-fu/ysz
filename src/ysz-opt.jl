@@ -1381,29 +1381,56 @@ function my_optimize()
     return
 end
 
-function cap_nodes()
-    return [
-        [-0.24979,  1,  3.65607],
-        [-0.22393,  1,  3.92012],
-        [-0.2001,   1,  4.3482],
-        [-0.17515,  1,  5.11678],
-        [-0.15058,  1,  5.82232],
-        [-0.12518,  1,  6.33863],
-        [-0.10049,  1,  6.50182],
-        [-0.07534,  1,  6.41274],
-        [-0.0505,   1,  5.90745],
-        [-0.02553,  1,  4.8472],
-        [-0.00073,  1,  4.51849],
-        [0.02527,   1,  4.17713],
-        [0.05048,   1,  3.79796]
-    ]
+function cap_nodes(T)
+    if T == 848
+        return [
+            [-0.24979,  1,  3.65607],
+            [-0.22393,  1,  3.92012],
+            [-0.2001,   1,  4.3482],
+            [-0.17515,  1,  5.11678],
+            [-0.15058,  1,  5.82232],
+            [-0.12518,  1,  6.33863],
+            [-0.10049,  1,  6.50182],
+            [-0.07534,  1,  6.41274],
+            [-0.0505,   1,  5.90745],
+            [-0.02553,  1,  4.8472],
+            [-0.00073,  1,  4.51849],
+            [0.02527,   1,  4.17713],
+            [0.05048,   1,  3.79796]
+        ]
+    end
+    if T == 798
+        return [
+            [-0.17426,  1,  2.96],
+            [-0.12419,  1,  3.76563],
+            [-0.10035,  1,  4.15587],
+            [-0.07537,  1,  4.7731],
+            [-0.04981,  1,  4.63355],
+            [-0.02539,  1,  4.20395],
+            [0.0006,    1,  3.91304],
+            [0.0246,    1,  3.60958],
+            [0.05102,   1,  3.17992]
+        ]
+    end
+
+    if T == 748
+        return [
+            [-0.09908,  1,  2.08736],
+            [-0.07522,  1,  2.3767],
+            [-0.04894,  1,  2.56506],
+            [-0.02427,  1,  2.79131],
+            [0.00049,   1,  2.6644],
+            [0.02642,   1,  2.61313],
+            [0.0516,    1,  2.3727]
+        ]
+    end
+    
+    println("Err: cap_nodes: wrong T")
+    return "wrong T"
 end
 
+
 function cap_optimize()
-
-
-    
-    
 
     function to_optimize(x)
         #println("x = ",x)
@@ -1424,7 +1451,7 @@ function cap_optimize()
         phi_range_cap = collect(-1:0.01:1)
         cbl, cs = direct_capacitance(parameters,phi_range_cap)
         
-        err = CV_get_error(phi_range_cap,cbl+cs, cap_nodes())
+        err = CV_get_error(phi_range_cap,cbl+cs, cap_nodes(parameters.T))
         
         #plot(phi_range_cap, cs, label="tot_capacitance")
         #PyPlot.legend(loc="best")
@@ -1467,27 +1494,55 @@ end
 
 function nu_anal_iter()
     PyPlot.close()
-    iter_pyplot = false
+    iter_pyplot = true
+    iter_save_file_bool = true
     err_min = 666
-    prms_min = [0, 0, 0, 0]
+    prms_min = [0, 0, 0, 0, 0]
     
     
-    phi_range_cap = collect(-1:0.01:1)
+    phi_range_cap = collect(-0.5: 0.01: 0.5)
     cscdl_min = phi_range_cap
     
     laast = [0.47, 0.44, -0.2, 0.15, 60.0]
     
+    parameters = YSZParameters()
+    parameters.T = 848
+    
+    nodes = cap_nodes(parameters.T)
+    
+    # .........[nu  , nus, DGA*eV, ms,   chi]
+    # 748K ->> [0.85, 0.21, -0.14, 0.05, 27.0]
+    # 798K ->> [0.55, 0.22, -0.17, 0.12, 27.0]
+    # 848K ->> [0.07, 0.51, -0.18, 0.3, 27.0]
+    
+    printfields(parameters)
     #for i in collect(0.0: 0.01: 1.0)
-    for i in collect(0.8: 0.01: 1.0)
-        for j in collect(0.4 : 0.01: 0.8)
+    for i in collect(0.0: 0.01: 0.93)
+        for j in collect(0.1 : 0.01: 0.93)
             #println(" ... j ",j)   
-            for k in collect(0.05: 0.05: 0.2)
-                for l in collect(0.0: 0.05: 0.3)
-                    for cc in collect(120: 1 :180)
-                        parameters = YSZParameters()
+            for k in collect(-0.5: 0.02: 0.5)
+                for l in collect(0.0: 0.05: 0.5)
+                    #for cc in collect(20: 3 :120)
+                    for cc in collect(27: 2 :27)
                         
                         prms=[i,j,k,l,cc]
-                        #prms=[0.01, 0.42, -0.2, 0.25, 27.0]
+                        if iter_pyplot
+                            prms=[0.85, 0.1, 0.05, 0.15, 27.0]
+                            prms=[0.89, 0.15, 0.15, 0.05, 121.0]
+                            prms=[0.86, 0.7, 0.1, 0.05, 114.0]
+                            prms=[0.63, 0.21, 0.05, 0.25, 27.0]
+                            prms=[0.07, 0.51, -0.18, 0.3, 27.0]
+                            
+                            if parameters.T == 748
+                                prms = [0.85, 0.21, -0.14, 0.05, 27.0]
+                            end
+                            if parameters.T == 798
+                                prms = [0.55, 0.22, -0.17, 0.12, 27.0]
+                            end
+                            if parameters.T == 848
+                                prms = [0.07, 0.51, -0.18, 0.3, 27.0]
+                            end
+                        end
                         
                         parameters.nu = prms[1]
                         parameters.nus = prms[2]
@@ -1496,7 +1551,7 @@ function nu_anal_iter()
                         parameters.ms_par = prms[4]
                         parameters.chi = prms[5]
                         
-                        parameters.T = 848
+                        
                         
                         parameters = YSZParameters_update(parameters)
                         
@@ -1504,8 +1559,8 @@ function nu_anal_iter()
                         cbl, cs = direct_capacitance(parameters,phi_range_cap)
 
                         
+                        
                         if iter_pyplot
-                            nodes = cap_nodes()
                             U_orig = zeros(0)
                             I_orig = zeros(0)
                             for i in nodes
@@ -1513,7 +1568,7 @@ function nu_anal_iter()
                                 append!(I_orig,i[3])
                             end
                             
-                            plot(phi_range_cap, cs + cbl, label=string("tot_capacitance ",i," ", j))
+                            plot(phi_range_cap, cs + cbl, label=string("prms ",prms, " ... T = ",parameters.T,"K"))
                             plot(U_orig,I_orig, label="exp")
                             PyPlot.legend(loc="best")
                             PyPlot.grid()
@@ -1524,18 +1579,33 @@ function nu_anal_iter()
                         end
                         
                         
-                        err = CV_get_error(phi_range_cap,cbl+cs, cap_nodes(), opt_pyplot=false)
+                        err = CV_get_error(phi_range_cap,cbl+cs, nodes, opt_pyplot=false)
                         #println(i," ",j," ",err)
                         if err < err_min
                             err_min = err
                             prms_min = prms
                             cscdl_min =  cs + cbl
                         end
-                    end
-                    
-                    if iter_pyplot
-                        PyPlot.pause(10)
-                        return
+                        
+                        if iter_save_file_bool
+                            iter_out_df = DataFrame(phi = Float64[], C = Float64[])
+                            for i in collect(1 : 1 : length(phi_range_cap))
+                                push!(iter_out_df,[phi_range_cap[i]   (cs+cbl)[i]])
+                            end
+                            out_name=string(
+                                "Cap_fit_T",@sprintf("%.0f",parameters.T),
+                                "_nu",@sprintf("%.2f",parameters.nu),
+                                "_nus",@sprintf("%.2f",parameters.nus),
+                                "_DGA_in",@sprintf("%.2f",prms[3]),
+                                "_ms",@sprintf("%.2f",prms[4])
+                                )
+                            CSV.write(string("./data/",out_name,".csv"),iter_out_df)
+                        end
+                        
+                        if iter_pyplot
+                            PyPlot.pause(2)
+                            return
+                        end 
                     end
                 end
                 
@@ -1546,7 +1616,7 @@ function nu_anal_iter()
   
   
         
-        nodes = cap_nodes()
+        
         U_orig = zeros(0)
         I_orig = zeros(0)
         for ii in nodes
@@ -1554,7 +1624,7 @@ function nu_anal_iter()
             append!(I_orig,ii[3])
         end
 
-        plot(phi_range_cap, cscdl_min, label=string("tot_capacitance ",prms_min))
+        plot(phi_range_cap, cscdl_min, label=string("prms_min ",prms_min, " ... T = ",parameters.T,"K"))
         plot(U_orig,I_orig, label="exp")
         PyPlot.legend(loc="best")
         PyPlot.grid()
