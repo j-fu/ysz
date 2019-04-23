@@ -38,7 +38,7 @@ mutable struct YSZParameters <:TwoPointFluxFVM.Physics
     areaL::Float64 # area of one FCC cell, a_L [m^2]
 
 
-    e0::Float64  
+    e0::Float64
     eps0::Float64
     kB::Float64  
     N_A::Float64 
@@ -77,8 +77,8 @@ function YSZParameters(this)
     
     #this.DD=1.5658146540360312e-11  # fitted to conductivity 0.063 S/cm ... TODO reference
     #this.DD=8.5658146540360312e-10  # random value  <<<< GOOOD hand-guess
-    this.DD=9.5658146540360312e-10  # random value
-    this.pO=1.                      # O2 atmosphere 
+    this.DD=9.5658146540360312e-10  # some value  <<<< nearly the BEST hand-guess
+    this.pO=1.0                   # O2 atmosphere
     this.T=1073                     
     this.nu=0.9                     # assumption
     this.nus=0.9                    # assumption
@@ -119,7 +119,6 @@ function printfields(this)
         println(getfield(this,name))
     end
 end
-
 
 
 const iphi=1
@@ -196,12 +195,11 @@ function breaction!(this::YSZParameters,f,bf,u,bu)
         f[iy]= (
             this.A0*(this.mO/this.areaL)*
             (
-                this.DGA/(this.kB*this.T) 
+                - this.DGA/(this.kB*this.T) 
                 +    
                 log(u[iy]*(1-bu[1]))
                 - 
                 log(bu[1]*(1-u[iy]))
-                
             )
         )
         # if bulk chem. pot. > surf. ch.p. then positive flux from bulk to surf
@@ -209,7 +207,7 @@ function breaction!(this::YSZParameters,f,bf,u,bu)
         bf[1]= (
             - this.mO*electroR - this.A0*(this.mO/this.areaL)*
             (
-                this.DGA/(this.kB*this.T) 
+                - this.DGA/(this.kB*this.T) 
                 +    
                 log(u[iy]*(1-bu[1]))
                 - 
@@ -265,7 +263,7 @@ function direct_capacitance(this::YSZParameters, domain)
            )
          );
     #
-    Y  = yB/(1-yB)*exp.(this.DGA/this.kB/this.T .- this.zA*this.e0/this.kB/this.T*PHI);
+    Y  = yB/(1-yB)*exp.(- this.DGA/this.kB/this.T .- this.zA*this.e0/this.kB/this.T*PHI);
     #
     CS = this.zA^2*this.e0^2/this.kB/this.T*this.ms_par/this.areaL*(1-this.nus)*Y./((1.0.+Y).^2);
     CBL  = nF./F;
@@ -285,13 +283,7 @@ function phi_to_y0(this::YSZParameters, phi)
 end
 
 function equil_phi(this::YSZParameters)
-    B = exp( - (this.DGA + this.DGR) / (this.kB * this.T))*this.pO^(1/2.0)
-    #println((this.DGA + this.DGR))
-    #println((this.kB * this.T))
-    #println(- (this.DGA + this.DGR) / (this.kB * this.T))
-    #println(this.pO^(1/2.0))
-    #println(B)
-    #println(B/(1+B))
+    B = exp( - (- this.DGA + this.DGR) / (this.kB * this.T))*this.pO^(1/2.0)
     return y0_to_phi(this, B/(1+B))
 end
 
@@ -346,22 +338,6 @@ function get_DGR_electroneutral(this::YSZParameters)
     )
 end
 
-function debug(this::YSZParameters, u, bu)
-    println("Debug ////////////////////////////////////////// ")
-    println("y~ys ",log(u[iy]*(1-bu[1])) - log(bu[1]*(1-u[iy])))
-    
-    electroR=electroreaction(this,bu)
-    f= this.A0*(this.mO/this.areaL)*
-            (
-                this.DGA/(this.kB*this.T) 
-                +    
-                log(u[iy]*(1-bu[1]))
-                - 
-                log(bu[1]*(1-u[iy]))
-                
-            )
-    println("f = ",f, "       elreac = ",electroR)
-end
 ###########################################################
 ###########################################################
 ###########################################################
@@ -576,6 +552,7 @@ function CV_get_error(CV_U, CV_I, nodes; opt_pyplot=false)
         end
         
         if opt_pyplot
+            PyPlot.close
             #PyPlot.clf()
             #subplot(211)
             #PyPlot.figure(figsize=(5.3, 4))
@@ -602,11 +579,11 @@ function CV_get_error(CV_U, CV_I, nodes; opt_pyplot=false)
 ###########################################################
 ###########################################################
 
-function run_new(;hexp=-9, verbose=false ,pyplot=false, width=10.0e-9, voltametry=false, dlcap=false, save_files=false, voltrate=0.005, phi0=0.0, upp_bound=0.5, low_bound=-0.5, sample=50, prms_in=[-10, 10, -0.0, 0.1, 0.5, 0.1], dtstep_in=1.0e-6, fitting=false, print_bool=false, par_study_bool=false, nu_in=0.9 )
+function run_new(;hexp=-9, verbose=false ,pyplot=false, width=10.0e-9, voltametry=false, dlcap=false, save_files=false, voltrate=0.005, phi0=0.0, upp_bound=0.5, low_bound=-0.5, sample=50, prms_in=[-10, 10, 0.0, 0.1, 0.5, 0.1], dtstep_in=1.0e-6, fitting=false, print_bool=false, par_study_bool=false, nu_in=0.9 )
 
     # A0_in \in [-6, 6]
     # R0_in \in [-6, 6]
-    # DGA_in \in [-1, 0]
+    # DGA_in \in [0, 1]
     # DGR_in \in [-2, 2]
     # beta_in \in [0,1]
     # A_in \in [-1, 1]
@@ -917,33 +894,26 @@ function run_new(;hexp=-9, verbose=false ,pyplot=false, width=10.0e-9, voltametr
             Qs= (parameters.e0/parameters.areaL)*parameters.zA*y_bound*parameters.ms_par*(1-parameters.nus) # (e0*zA*nA_s)
 
                  
-            # dtstep to potential (phi + voltrate*dtstep)
-            #sys.boundary_values[iphi,1]=phi+voltrate*dir*dtstep
-            #Ud=solve(sys,U,control=control,tstep=dtstep)
-            Ud = inival
-            dtstep = tstep
-            
-            Qbd= - integrate(sys,reaction!,Ud) # \int n^F
-            
-            dphid_end = bulk_unknowns(sys,Ud)[iphi, end] - bulk_unknowns(sys,Ud)[iphi, end-1]
-            dx_end = X[end] - X[end-1]
-            dphiBd = parameters.eps0*(1+parameters.chi)*(dphid_end/dx_end)
-            
-            yd_bound=boundary_unknowns(sys,Ud,1)
-            Qsd= (parameters.e0/parameters.areaL)*parameters.zA*yd_bound*parameters.ms_par*(1-parameters.nus) # (e0*zA*nA_s)
-            
-            # U0 = u
+             # for faster computation, solving of "dtstep problem" is not performed
+            U0 = inival
             inival.=U
+            Qb0 = - integrate(sys,reaction!,U0) # \int n^F
+            dphi0_end = bulk_unknowns(sys,U0)[iphi, end] - bulk_unknowns(sys,U0)[iphi, end-1]
+            dphiB0 = parameters.eps0*(1+parameters.chi)*(dphi0_end/dx_end)
+            y0_bound=boundary_unknowns(sys,U0,1)
+            Qs0 = (parameters.e0/parameters.areaL)*parameters.zA*y0_bound*parameters.ms_par*(1-parameters.nus) # (e0*zA*nA_s)
+
+
             
             # time derivatives
-            Is  = - (Qsd[1] - Qs[1])/dtstep                
-            Ib  = - (Qbd[iphi] - Qb[iphi])/dtstep 
-            Ibb = - (dphiBd - dphiB)/dtstep
-
-
+            Is  = - (Qs[1] - Qs0[1])/tstep                
+            Ib  = - (Qb[iphi] - Qb0[iphi])/tstep 
+            Ibb = - (dphiB - dphiB0)/tstep
+            
+            
             # reaction average
             reac = - 2*parameters.e0*electroreaction(parameters, y_bound)
-            reacd = - 2*parameters.e0*electroreaction(parameters, yd_bound)
+            reacd = - 2*parameters.e0*electroreaction(parameters, y0_bound)
             Ir= 0.5*(reac + reacd)
 
             #############################################################
@@ -1114,26 +1084,30 @@ function run_new(;hexp=-9, verbose=false ,pyplot=false, width=10.0e-9, voltametr
 		  plot(phi_range[cv_range].-phi0, Is_range[cv_range] ,"green",label="surf")
 		  plot(phi_range[cv_range].-phi0, r_range[cv_range] ,"red",label="reac")
 		end
-		PyPlot.xlabel("nu (V)")
-		PyPlot.ylabel(L"Capacitance (F/m$^2$)")  
-		PyPlot.legend(loc="best")
-                    PyPlot.xlim(-0.5, 0.5)
-                    PyPlot.ylim(0, 5)
-		PyPlot.grid()
-		PyPlot.show()
-		PyPlot.pause(10)
+		if dlcap
+                        PyPlot.xlabel("nu (V)")
+                        PyPlot.ylabel(L"Capacitance (F/m$^2$)")  
+                        PyPlot.legend(loc="best")
+                        PyPlot.xlim(-0.5, 0.5)
+                        PyPlot.ylim(0, 5)
+                        PyPlot.grid()
+                        PyPlot.show()
+                        PyPlot.pause(10)
+                        
+                        PyPlot.clf()
+                        plot(phi_range[cv_range].-phi0,( (Ib_range+Is_range+r_range)[cv_range]  )/voltrate,"brown", label="total")
+                        PyPlot.xlabel("nu (V)")
+                        PyPlot.ylabel(L"Capacitance (F/m$^2$)") 
+                        PyPlot.legend(loc="best")
+                        PyPlot.xlim(-0.5, 0.5)
+                        PyPlot.ylim(0, 5)
+                        PyPlot.grid()
+                        PyPlot.show()
+                        #PyPlot.pause(10)
+                    end
 		
 		
-		PyPlot.clf()
-		plot(phi_range[cv_range].-phi0,( (Ib_range+Is_range+r_range)[cv_range]  )/voltrate,"brown", label="total")
-		PyPlot.xlabel("nu (V)")
-		PyPlot.ylabel(L"Capacitance (F/m$^2$)") 
-		PyPlot.legend(loc="best")
-                    PyPlot.xlim(-0.5, 0.5)
-                    PyPlot.ylim(0, 5)
-		PyPlot.grid()
-		PyPlot.show()
-		#PyPlot.pause(10)
+
 		
 		subplot(222)
 		if dlcap
@@ -1227,12 +1201,14 @@ function run_new(;hexp=-9, verbose=false ,pyplot=false, width=10.0e-9, voltametr
         #######################################################
         #######################################################
     end
+        
     if fitting
         return CV_get_error(
             phi_range[istep_cv_start:end].-phi0,
             ((Is_range + Ib_range + r_range + Ibb_range)[istep_cv_start:end]),
             #check_nodes_short()
-            check_nodes_whole()
+            check_nodes_whole(),
+            opt_pyplot=true
             )
     end
 end
@@ -1305,7 +1281,7 @@ function my_optimize()
 	[1]
     end
 
-    function to_optimize(x)
+    function to_optimize(x) 
         #err = run_new(print_bool=false, fitting=true, voltametry=true, pyplot=false, voltrate=0.005, sample=8, bound=0.41, 
         #    prms_in=x)
         prms = prepare_prms(mask, x0, x)
@@ -1315,7 +1291,7 @@ function my_optimize()
         #err = run_new(print_bool=false, fitting=true, voltametry=true, pyplot=true, voltrate=0.005, sample=50, upp_bound=0.474, low_bound=-0.429, 
         #    prms_in=prms)
             
-        err = run_new(print_bool=false, fitting=true, voltametry=true, dlcap=true, pyplot=true, voltrate=0.001, sample=40, upp_bound=0.55, low_bound=-0.548, 
+        err = run_new(print_bool=true, fitting=true, voltametry=true, dlcap=false, pyplot=true, voltrate=0.001, sample=10, upp_bound=0.55, low_bound=-0.548, 
             prms_in=prms, width=0.45e-3)
         
         println(" || err =", err)
@@ -1333,33 +1309,33 @@ function my_optimize()
     #x0 = [4.42991, 20.03254, 0.0, 0.0, 0.5, 0.151]
     
     #x0 = [9.00137, 20.1747, 0.5, 0.0, 0.5, 0.206002]
-    x0 = [2.3, 19.5, -1, -1, 0.6, 1.2]
-    #x0 = [2.32407, 18.4458, -1.0, -1.0, 0.769217, 1.03349]
-    #x0 = [2.34223, 18.4039, -1.0, -1.0, 0.72743, 0.95021] # quite good fit <<<<<<<<<<
-    #x0 = [2.34223, 20.8039, -1.0, -1.0, 0.52743, 0.25021] # hand fit <<< usable
-    #x0 = [2.74223, 19.7039, -1.0, -1.0, 0.58, 0.25021]
-    #x0 = [2.44223, 20.5039, -1.0, -1.0, 0.61, 0.25021] # not bad :)) <<<<<<<<<
+    x0 = [2.3, 19.5, 1, -1, 0.6, 1.2]
+    #x0 = [2.32407, 18.4458, 1.0, -1.0, 0.769217, 1.03349]
+    #x0 = [2.34223, 18.4039, 1.0, -1.0, 0.72743, 0.95021] # quite good fit <<<<<<<<<<
+    #x0 = [2.34223, 20.8039, 1.0, -1.0, 0.52743, 0.25021] # hand fit <<< usable
+    #x0 = [2.74223, 19.7039, 1.0, -1.0, 0.58, 0.25021]
+    #x0 = [2.44223, 20.5039, 1.0, -1.0, 0.61, 0.25021] # not bad :)) <<<<<<<<<
     
     # err metric <- check_nodes_long()
-    x0 = [2.54223, 20.5039, -1.0000000, -1.000000, 0.500000, 0.250210]  # by hand
-    x0 = [2.54223, 20.5039, -1.0000000, -1.000000, 0.632507, 0.250210] # fitted beta << GOOD << err =0.006814132871406775
-    x0 = [2.54223, 20.5039, -1.0000000, -1.000000, 0.632507, 0.253287] # fitted A  << err =0.006807257238292433
-    x0 = [2.54223, 20.5033, -1.0000000, -1.000000, 0.632507, 0.253287] # fitted R0 << err =0.0068072339219288356
-    x0 = [2.55263, 20.5033, -1.0000000, -1.000000, 0.632507, 0.253287] # fitted A0 << err =0.006745444782481952
-    x0 = [2.58082, 20.4100, -1.0000000, -1.000000, 0.632507, 0.253287] # fitted A0, R0 << err =0.006574359568544145
-    x0 = [2.58082, 20.4100, -0.0905748, -0.708014, 0.632507, 0.253287] # fitted DGA, DGR << err =0.006573859072513787
-    x0 = [2.70077, 20.5264, -0.0905748, -0.708014, 0.598817, 0.143269] # fittet 110011 << err =0.005685020802399199
+    x0 = [2.54223, 20.5039, 1.0000000, -1.000000, 0.500000, 0.250210]  # by hand
+    x0 = [2.54223, 20.5039, 1.0000000, -1.000000, 0.632507, 0.250210] # fitted beta << GOOD << err =0.006814132871406775
+    x0 = [2.54223, 20.5039, 1.0000000, -1.000000, 0.632507, 0.253287] # fitted A  << err =0.006807257238292433
+    x0 = [2.54223, 20.5033, 1.0000000, -1.000000, 0.632507, 0.253287] # fitted R0 << err =0.0068072339219288356
+    x0 = [2.55263, 20.5033, 1.0000000, -1.000000, 0.632507, 0.253287] # fitted A0 << err =0.006745444782481952
+    x0 = [2.58082, 20.4100, 1.0000000, -1.000000, 0.632507, 0.253287] # fitted A0, R0 << err =0.006574359568544145
+    x0 = [2.58082, 20.4100, 0.0905748, -0.708014, 0.632507, 0.253287] # fitted DGA, DGR << err =0.006573859072513787
+    x0 = [2.70077, 20.5264, 0.0905748, -0.708014, 0.598817, 0.143269] # fittet 110011 << err =0.005685020802399199
     
     # err metric <- check_nodes_whole()
-    x0 = [2.74851, 20.5631, -0.0905748, -0.708014, 0.605159, 0.105409] # fitting... 110011 << err =0.0054800474768966585
-    x0 = [2.73650, 20.6063, -0.0905748, -0.708014, 0.607443, 0.100000] # fitting... 110011 << err =0.005415825589421705
-    x0 = [2.73645, 20.6064, -0.0905748, -0.708014, 0.607457, 0.100000] # fitted 110011 <<  err =0.0054158249335496105
-    x0 = [2.736451985137371, 20.606423236896422, -0.0905748, -0.708014, 0.6074566741435283, 0.1] # ACURATE FINALL FIT
-    # >> x0corr = [21.71975544711280, 20.606423236896422, -0.0905748, -0.708014, 0.6074566741435283, 0.1] # ACURATE FINALL FIT
-    #x0 = [6.736451985137371, 24.606423236896422, -0.0905748, -0.708014, 0.6074566741435283, 0.1]
-    #x0 = [2.736451985137371, 20.606423236896422, -0.0905748, -0.1508014, 0.6074566741435283, 0.1]
-    x0 = [1.736451985137371, 15.106423236896422, -0.0905748, -0.108014, 0.6074566741435283, 0.1] # ploted to slides
-    # >> x0corr = [20.71975544711280, 15.106423236896422, -0.0905748, -0.108014, 0.6074566741435283, 0.1] # ploted to slides
+    x0 = [2.74851, 20.5631, 0.0905748, -0.708014, 0.605159, 0.105409] # fitting... 110011 << err =0.0054800474768966585
+    x0 = [2.73650, 20.6063, 0.0905748, -0.708014, 0.607443, 0.100000] # fitting... 110011 << err =0.005415825589421705
+    x0 = [2.73645, 20.6064, 0.0905748, -0.708014, 0.607457, 0.100000] # fitted 110011 <<  err =0.0054158249335496105
+    x0 = [2.736451985137371, 20.606423236896422, 0.0905748, -0.708014, 0.6074566741435283, 0.1] # ACURATE FINALL FIT
+    # >> x0corr = [21.71975544711280, 20.606423236896422, 0.0905748, -0.708014, 0.6074566741435283, 0.1] # ACURATE FINALL FIT
+    #x0 = [6.736451985137371, 24.606423236896422, 0.0905748, -0.708014, 0.6074566741435283, 0.1]
+    #x0 = [2.736451985137371, 20.606423236896422, 0.0905748, -0.1508014, 0.6074566741435283, 0.1]
+    #x0 = [1.736451985137371, 15.106423236896422, 0.0905748, -0.108014, 0.6074566741435283, 0.1] # ploted to slides
+    # >> x0corr = [20.71975544711280, 15.106423236896422, 0.0905748, -0.108014, 0.6074566741435283, 0.1] # ploted to slides
     
     mask = [0, 0, 1, 1, 0, 0] # determining, which parametr should be fitted
     
@@ -1496,146 +1472,235 @@ function nu_anal_iter()
     PyPlot.close()
     iter_pyplot = true
     iter_save_file_bool = true
-    err_min = 666
-    prms_min = [0, 0, 0, 0, 0]
+
     
     
     phi_range_cap = collect(-0.5: 0.01: 0.5)
-    cscdl_min = phi_range_cap
+
     
     laast = [0.47, 0.44, -0.2, 0.15, 60.0]
     
-    parameters = YSZParameters()
-    parameters.T = 848
-    
-    nodes = cap_nodes(parameters.T)
+
     
     # .........[nu  , nus, DGA*eV, ms,   chi]
     # 748K ->> [0.85, 0.21, -0.14, 0.05, 27.0]
     # 798K ->> [0.55, 0.22, -0.17, 0.12, 27.0]
     # 848K ->> [0.07, 0.51, -0.18, 0.3, 27.0]
-    
-    printfields(parameters)
-    #for i in collect(0.0: 0.01: 1.0)
-    for i in collect(0.0: 0.01: 0.93)
-        for j in collect(0.1 : 0.01: 0.93)
-            #println(" ... j ",j)   
-            for k in collect(-0.5: 0.02: 0.5)
-                for l in collect(0.0: 0.05: 0.5)
-                    #for cc in collect(20: 3 :120)
-                    for cc in collect(27: 2 :27)
-                        
-                        prms=[i,j,k,l,cc]
-                        if iter_pyplot
-                            prms=[0.85, 0.1, 0.05, 0.15, 27.0]
-                            prms=[0.89, 0.15, 0.15, 0.05, 121.0]
-                            prms=[0.86, 0.7, 0.1, 0.05, 114.0]
-                            prms=[0.63, 0.21, 0.05, 0.25, 27.0]
-                            prms=[0.07, 0.51, -0.18, 0.3, 27.0]
-                            
-                            if parameters.T == 748
-                                prms = [0.85, 0.21, -0.14, 0.05, 27.0]
-                            end
-                            if parameters.T == 798
-                                prms = [0.55, 0.22, -0.17, 0.12, 27.0]
-                            end
-                            if parameters.T == 848
-                                prms = [0.07, 0.51, -0.18, 0.3, 27.0]
-                            end
-                        end
-                        
-                        parameters.nu = prms[1]
-                        parameters.nus = prms[2]
-                        parameters.DGA = parameters.e0*prms[3]
-                        parameters.m_par = 2
-                        parameters.ms_par = prms[4]
-                        parameters.chi = prms[5]
-                        
-                        
-                        
-                        parameters = YSZParameters_update(parameters)
-                        
-                        
-                        cbl, cs = direct_capacitance(parameters,phi_range_cap)
 
-                        
-                        
-                        if iter_pyplot
-                            U_orig = zeros(0)
-                            I_orig = zeros(0)
-                            for i in nodes
-                                append!(U_orig,i[1])
-                                append!(I_orig,i[3])
+    parameters = YSZParameters()
+    printfields(parameters)
+    
+    DATA = []
+    T748list = []
+    T798list = []
+    T848list = []
+    sum_list = []
+    sum = 0
+
+    overall_min = 666
+    overall_ms = -1
+    
+    ms_range = collect(0.05: 0.002: 0.65)
+    
+    for l in ms_range  # for >>> ms <<<
+        
+        
+        for T_in in collect(748 : 50 : 848)
+        
+            err_min = 666
+            prms_min = [0, 0, 0, 0, 0]
+            cscdl_min = phi_range_cap
+            
+            #parameters.T = T_in
+            parameters.T = 848
+            
+            
+            nodes = cap_nodes(parameters.T)
+            
+            for i in collect(0.0: 0.01: 0.93)
+            #for i in collect(0.0: 0.01: 0.93)
+                for j in collect(0.1 : 0.01: 0.93)
+                    #println(" ... j ",j)   
+                    for k in collect(-0.5: 0.02: 0.5)
+                        #for cc in collect(20: 3 :120)
+                        for cc in collect(27: 2 :27)
+                            
+                            prms=[i,j,k,l,cc]
+                            if iter_pyplot
+                                prms=[0.85, 0.1, 0.05, 0.15, 27.0]
+                                prms=[0.89, 0.15, 0.15, 0.05, 121.0]
+                                prms=[0.86, 0.7, 0.1, 0.05, 114.0]
+                                prms=[0.63, 0.21, 0.05, 0.25, 27.0]
+                                prms=[0.07, 0.51, -0.18, 0.3, 27.0]
+
+                                if parameters.T == 748
+                                    #prms = [0.85, 0.21, -0.14, 0.05, 27.0]
+                                    prms = [0.85, 0.85, -0.14, 0.262, 27.0]
+                                end
+                                if parameters.T == 798
+                                    #prms = [0.55, 0.22, -0.17, 0.12, 27.0]
+                                    prms = [0.57, 0.64, -0.16, 0.262, 27.0]
+                                end
+                                if parameters.T == 848
+                                    #prms = [0.07, 0.51, -0.18, 0.3, 27.0]
+                                    prms = [0.07, 0.44, -0.18, 0.262, 27.0]
+                                end
                             end
                             
-                            plot(phi_range_cap, cs + cbl, label=string("prms ",prms, " ... T = ",parameters.T,"K"))
-                            plot(U_orig,I_orig, label="exp")
-                            PyPlot.legend(loc="best")
-                            PyPlot.grid()
+                            parameters.nu = prms[1]
+                            parameters.nus = prms[2]
+                            parameters.DGA = parameters.e0*prms[3]
+                            parameters.m_par = 2
+                            parameters.ms_par = prms[4]
+                            parameters.chi = prms[5]
                             
-                            PyPlot.draw()
-                            PyPlot.show()
                             
-                        end
-                        
-                        
-                        err = CV_get_error(phi_range_cap,cbl+cs, nodes, opt_pyplot=false)
-                        #println(i," ",j," ",err)
-                        if err < err_min
-                            err_min = err
-                            prms_min = prms
-                            cscdl_min =  cs + cbl
-                        end
-                        
-                        if iter_save_file_bool
-                            iter_out_df = DataFrame(phi = Float64[], C = Float64[])
-                            for i in collect(1 : 1 : length(phi_range_cap))
-                                push!(iter_out_df,[phi_range_cap[i]   (cs+cbl)[i]])
+                            
+                            parameters = YSZParameters_update(parameters)
+                            
+                            
+                            cbl, cs = direct_capacitance(parameters,phi_range_cap)
+
+                            
+                            
+                            if iter_pyplot
+                                U_orig = zeros(0)
+                                I_orig = zeros(0)
+                                for i in nodes
+                                    append!(U_orig,i[1])
+                                    append!(I_orig,i[3])
+                                end
+                                
+                                plot(phi_range_cap, cs + cbl, label=string("prms ",prms, " ... T = ",parameters.T,"K"))
+                                plot(U_orig,I_orig, label="exp")
+                                PyPlot.legend(loc="best")
+                                PyPlot.grid()
+                                
+                                PyPlot.draw()
+                                PyPlot.show()
+                                
                             end
-                            out_name=string(
-                                "Cap_fit_T",@sprintf("%.0f",parameters.T),
-                                "_nu",@sprintf("%.2f",parameters.nu),
-                                "_nus",@sprintf("%.2f",parameters.nus),
-                                "_DGA_in",@sprintf("%.2f",prms[3]),
-                                "_ms",@sprintf("%.2f",prms[4])
-                                )
-                            CSV.write(string("./data/",out_name,".csv"),iter_out_df)
+                            
+                            
+                            err = CV_get_error(phi_range_cap,cbl+cs, nodes, opt_pyplot=false)
+                            #println(i," ",j," ",err)
+                            if err < err_min
+                                err_min = err
+                                prms_min = prms
+                                cscdl_min =  cs + cbl
+                            end
+                            
+                            #push!(DATA,[prms, err])
+                            
+                            if iter_save_file_bool
+                                iter_out_df = DataFrame(phi = Float64[], C = Float64[])
+                                for i in collect(1 : 1 : length(phi_range_cap))
+                                    push!(iter_out_df,[phi_range_cap[i]   (cs+cbl)[i]])
+                                end
+                                out_name=string(
+                                    "Cap_fit_T",@sprintf("%.0f",parameters.T),
+                                    "_nu",@sprintf("%.2f",parameters.nu),
+                                    "_nus",@sprintf("%.2f",parameters.nus),
+                                    "_DGA_in",@sprintf("%.2f",prms[3]),
+                                    "_ms",@sprintf("%.2f",prms[4])
+                                    )
+                                CSV.write(string("./data/",out_name,".csv"),iter_out_df)
+                            end
+                            
+                            if iter_pyplot
+                                PyPlot.pause(2)
+                                return
+                            end 
                         end
-                        
-                        if iter_pyplot
-                            PyPlot.pause(2)
-                            return
-                        end 
                     end
+                    
                 end
-                
+            
+            
+                #println("i ",i, " >> err_min ",err_min, "      prms_min ",prms_min)
+    
+    
+            
+                if false
+                    U_orig = zeros(0)
+                    I_orig = zeros(0)
+                    for ii in nodes
+                        append!(U_orig,ii[1])
+                        append!(I_orig,ii[3])
+                    end
+
+                    plot(phi_range_cap, cscdl_min, label=string("prms_min ",prms_min, " ... T = ",parameters.T,"K"))
+                    plot(U_orig,I_orig, label="exp")
+                    PyPlot.legend(loc="best")
+                    PyPlot.grid()
+
+                    PyPlot.draw()
+                    PyPlot.show()
+                    PyPlot.pause(0.1)    
+                end
+            end
+            
+            println("ms ",l,"  T ",parameters.T," err_min ",err_min,"  prms_min ",prms_min)
+            if parameters.T == 748
+                push!(T748list,err_min)   
+            end
+            if parameters.T == 798
+                push!(T798list,err_min)
+            end
+            if parameters.T == 848
+                push!(T848list,err_min)
             end
         end
+        sum = T748list[end]+T798list[end]+T848list[end]
         
-        println("i ",i, " >> err_min ",err_min, "      prms_min ",prms_min)
-  
-  
-        
-        
-        U_orig = zeros(0)
-        I_orig = zeros(0)
-        for ii in nodes
-            append!(U_orig,ii[1])
-            append!(I_orig,ii[3])
+        push!(sum_list,sum)
+        if sum < overall_min
+            overall_min = sum
+            overall_ms = l
         end
-
-        plot(phi_range_cap, cscdl_min, label=string("prms_min ",prms_min, " ... T = ",parameters.T,"K"))
-        plot(U_orig,I_orig, label="exp")
-        PyPlot.legend(loc="best")
-        PyPlot.grid()
-
-        PyPlot.draw()
-        PyPlot.show()
-        PyPlot.pause(0.1)    
-    
+        
+        println(" ------ ")
     end
-    println("err_min ",err_min, "      prms_min ",prms_min)
+    #println(length(DATA))
+    #println(DATA[1])
+    #println(DATA[2][1])
+    #println("err_min ",err_min, "      prms_min ",prms_min)
     #PyPlot.pause(100)
+    
+    subplot(411)
+    plot(ms_range, T748list, label="748K")
+    PyPlot.xlabel("ms (1)")
+    PyPlot.ylabel("Error")
+    PyPlot.legend(loc="best")
+    PyPlot.grid()
+    
+    subplot(412)
+    plot(ms_range, T798list, label="798K")
+    PyPlot.xlabel("ms (1)")
+    PyPlot.ylabel("Error")
+    PyPlot.legend(loc="best")
+    PyPlot.grid()
+    
+    subplot(413)
+    plot(ms_range, T848list, label="848K")
+    PyPlot.xlabel("ms (1)")
+    PyPlot.ylabel("Error")
+    PyPlot.legend(loc="best")
+    PyPlot.grid()
+    
+    subplot(414)
+    plot(ms_range, sum_list, label="sum")
+    PyPlot.xlabel("ms (1)")
+    PyPlot.ylabel("Error")
+    PyPlot.legend(loc="best")
+    PyPlot.grid()
+    
+    println("min ms >>> ",overall_ms,"   ...   min sum >>> ",overall_min)
+    
+    PyPlot.draw()
+    PyPlot.show()
+    PyPlot.pause(1000) 
+    println("<< end >>")
 end
 
 # TODO //////////
