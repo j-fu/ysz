@@ -123,12 +123,12 @@ const iphi=1
 const iy=2
 
 # time derivatives
-function storage!(this::YSZParameters, f,u)
+function storage!(this::YSZParameters, node,f,u)
     f[iphi]=0
     f[iy]=this.mO*this.m_par*(1.0-this.nu)*u[iy]/this.vL
 end
 
-function bstorage!(this::YSZParameters,bf,bu)
+function bstorage!(this::YSZParameters,node,bf,bu)
     if  this.bregion==1
         bf[1]=this.mO*this.ms_par*(1.0-this.nus)*bu[1]/this.areaL
     else
@@ -137,7 +137,7 @@ function bstorage!(this::YSZParameters,bf,bu)
 end
 
 # bulk flux
-function flux!(this::YSZParameters,f,uk,ul)
+function flux!(this::YSZParameters,edge,f,uk,ul)
     f[iphi]=this.eps0*(1+this.chi)*(uk[iphi]-ul[iphi])    
     
     bp,bm=fbernoulli_pm(
@@ -161,7 +161,7 @@ end
 
 
 # sources
-function reaction!(this::YSZParameters, f,u)
+function reaction!(this::YSZParameters, node, f,u)
     f[iphi]=-(this.e0/this.vL)*(this.zA*this.m_par*(1-this.nu)*u[iy] + this.zL) # source term for the Poisson equation, beware of the sign
     f[iy]=0
 end
@@ -187,7 +187,7 @@ function electroreaction(this::YSZParameters, bu)
 end
 
 # surface reaction + adsorption
-function breaction!(this::YSZParameters,f,bf,u,bu)
+function breaction!(this::YSZParameters,node,f,bf,u,bu)
     if  this.bregion==1
         electroR=electroreaction(this,bu)
         f[iy]= (
