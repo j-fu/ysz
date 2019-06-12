@@ -1,6 +1,4 @@
-    """
-YSZ example cloned from iliq.jl of the TwoPointFluxFVM package.
-"""
+module YSZNew
 
 using Printf
 using TwoPointFluxFVM
@@ -302,14 +300,18 @@ end
 
 
 
-function run_new(;print_bool=false, verbose=false ,pyplot=false, save_files=false, width=10.0e-9,  dx_exp=-9, voltametry=false, dlcap=false, voltrate=0.005, upp_bound=0.5, low_bound=-0.5, sample=40, prms_in=[21.71975544711280, 20.606423236896422, 0.0905748, -0.708014, 0.6074566741435283, 0.1], nu_in=0.9)
+function run_new(;test=false, print_bool=false, verbose=false ,pyplot=false, save_files=false, width=10.0e-9,  dx_exp=-9, voltammetry=false, dlcap=false, voltrate=0.005, upp_bound=0.5, low_bound=-0.5, sample=40, prms_in=[21.71975544711280, 20.606423236896422, 0.0905748, -0.708014, 0.6074566741435283, 0.1], nu_in=0.9)
+
+    # prms_in = [ A0, R0, DGA, DGR, beta, A ]
 
     # Geometry of the problem
     AreaEllyt = 0.000201 * 0.6      # m^2   (geometrical area)*(1 - porosity)
     width_Ellyt = 0.00045           # m     width of the half-cell
     if dlcap
         AreaEllyt = 1.0      # m^2    
-        println("dlcap > area = 1")
+        if print_bool
+            println("dlcap > area = 1")
+        end
     end
     #
     dx_start = 10^convert(Float64,dx_exp)
@@ -327,7 +329,9 @@ function run_new(;print_bool=false, verbose=false ,pyplot=false, save_files=fals
     parameters.R0 = 10.0^prms_in[2]      # [1 / m^2 s]
     if dlcap
         parameters.R0 = 0
-        println("dlcap > R0= ",parameters.R0)
+        if print_bool
+            println("dlcap > R0= ",parameters.R0)
+        end
     end
     parameters.DGA = prms_in[3] * eV    # [J]
     parameters.DGR = prms_in[4] * eV    # [J]
@@ -397,11 +401,11 @@ function run_new(;print_bool=false, verbose=false ,pyplot=false, save_files=fals
     control.damp_growth=1.9
     time=0.0
     
-    # code for computationg the CV
-    if voltametry
+    # code for performing the CV
+    if voltammetry
         istep=1
         phi=0
-#        phi=phi0
+    #        phi=phi0
 
         # inicializing storage lists
         y0_range=zeros(0)
@@ -449,7 +453,12 @@ function run_new(;print_bool=false, verbose=false ,pyplot=false, save_files=fals
         if print_bool
             println("phi_equilibrium = ",phi0)
             println("ramp ......")
-        end    
+        end
+        
+        if test
+            U = inival
+        end
+        
         while state != "cv_is_off"
             if state=="ramp" && ((dir==1 && phi > phi0) || (dir==-1 && phi < phi0))
                 phi = phi0
@@ -492,7 +501,7 @@ function run_new(;print_bool=false, verbose=false ,pyplot=false, save_files=fals
             y_bound=boundary_unknowns(sys,U,1)
             Qs= (parameters.e0/parameters.areaL)*parameters.zA*y_bound*parameters.ms_par*(1-parameters.nus) # (e0*zA*nA_s)
 
-                 
+                    
             # for faster computation, solving of "dtstep problem" is not performed
             U0 = inival
             inival.=U
@@ -556,12 +565,14 @@ function run_new(;print_bool=false, verbose=false ,pyplot=false, save_files=fals
             
             
             # plotting                  
-            num_subplots=4
-            ys_marker_size=4
-            PyPlot.subplots_adjust(hspace=0.5)
+
 
             if pyplot && istep%10 == 0
-                
+
+                num_subplots=4
+                ys_marker_size=4
+                PyPlot.subplots_adjust(hspace=0.5)
+            
                 PyPlot.clf() 
                 
                 if num_subplots > 0
@@ -606,7 +617,7 @@ function run_new(;print_bool=false, verbose=false ,pyplot=false, save_files=fals
                     PyPlot.legend(loc="best")
                     PyPlot.grid()
                 end
-                              
+                                
                 pause(1.0e-10)
             end
             
@@ -619,17 +630,20 @@ function run_new(;print_bool=false, verbose=false ,pyplot=false, save_files=fals
                 phi+=voltrate*dir*tstep
             end
         end
-        PyPlot.pause(5)
+        
+        
         
         # the finall plot
         if pyplot
+            PyPlot.pause(5)
+            
             PyPlot.clf()
             #PyPlot.close()
             #PyPlot.figure(figsize=(5,5))
             
             cv_range = (istep_cv_start+1):length(phi_range)
- 
- 
+
+
             subplot(221)
             if dlcap
                 plot(phi_range[cv_range].-phi0,( Ib_range[cv_range] )/voltrate,"blue", label="bulk")
@@ -718,8 +732,8 @@ function run_new(;print_bool=false, verbose=false ,pyplot=false, save_files=fals
                     end
                 end
             end
-            parn = ["verbose" ,"pyplot", "width", "voltametry", "voltrate", "low_bound", "upp_bound", "sample", "phi0"]
-            parv =[verbose ,pyplot, width, voltametry, voltrate, low_bound, upp_bound, sample, @sprintf("%.6g",phi0)]
+            parn = ["verbose" ,"pyplot", "width", "voltammetry", "voltrate", "low_bound", "upp_bound", "sample", "phi0"]
+            parv =[verbose ,pyplot, width, voltammetry, voltrate, low_bound, upp_bound, sample, @sprintf("%.6g",phi0)]
             for ii in 1:length(parn)
                     linestring=string(parn[ii],": ",parv[ii])
                     PyPlot.text(0.01+shift, 0.95+height, linestring, fontproperties="monospace")
@@ -746,5 +760,13 @@ function run_new(;print_bool=false, verbose=false ,pyplot=false, save_files=fals
                 PyPlot.savefig(string("./images/",out_name,".png"))
             end
         end
+        if test
+            I1 = integrate(sys, reaction!, U)
+            #println(I1)
+            return I1[1]
+        end
     end
+end
+
+
 end
