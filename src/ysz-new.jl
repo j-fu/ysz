@@ -1,14 +1,13 @@
 module YSZNew
 
 using Printf
-using TwoPointFluxFVM
+using VoronoiFVM
 using PyPlot
 using DataFrames
 using CSV
 using LeastSquaresOptim
 
-mutable struct YSZParameters <:TwoPointFluxFVM.Physics
-    TwoPointFluxFVM.@AddPhysicsBaseClassFields
+mutable struct YSZParameters <: VoronoiFVM.AbstractData
 
     # to fit
     A0::Float64   # surface adsorption coefficient [ s^-1 ]
@@ -52,9 +51,6 @@ mutable struct YSZParameters <:TwoPointFluxFVM.Physics
 end
 
 function YSZParameters(this)
-    TwoPointFluxFVM.PhysicsBase(this,2)
-    this.num_bspecies=[ 1, 0]
-    
     
     this.e0   = 1.602176565e-19  #  [C]
     this.eps0 = 8.85418781762e-12 #  [As/(Vm)]
@@ -121,23 +117,26 @@ end
 
 const iphi=1
 const iy=2
+const ib=3
 
 # time derivatives
-function storage!(this::YSZParameters, node,f,u)
+function storage!(f,u, node, this::YSZParameters)
     f[iphi]=0
     f[iy]=this.mO*this.m_par*(1.0-this.nu)*u[iy]/this.vL
 end
 
-function bstorage!(this::YSZParameters,node,bf,bu)
-    if  this.bregion==1
-        bf[1]=this.mO*this.ms_par*(1.0-this.nus)*bu[1]/this.areaL
+function bstorage!(f,u,node, this::YSZParameters)
+    if  node.region==1
+        f[ib]=this.mO*this.ms_par*(1.0-this.nus)*u[ib]/this.areaL
     else
-        bf[1]=0
+        f[ib]=0
     end
 end
 
 # bulk flux
-function flux!(this::YSZParameters,edge,f,uk,ul)
+function flux!(f,u, edge, this::YSZParameters)
+    uk=viewK(edge,u)
+    ul=viewL(edge,u)
     f[iphi]=this.eps0*(1+this.chi)*(uk[iphi]-ul[iphi])    
     
     bp,bm=fbernoulli_pm(
@@ -161,23 +160,23 @@ end
 
 
 # sources
-function reaction!(this::YSZParameters, node, f,u)
+function reaction!(f,u, node, this::YSZParameters)
     f[iphi]=-(this.e0/this.vL)*(this.zA*this.m_par*(1-this.nu)*u[iy] + this.zL) # source term for the Poisson equation, beware of the sign
     f[iy]=0
 end
 
 # surface reaction
-function electroreaction(this::YSZParameters, bu)
+function electroreaction(this::YSZParameters, u)
     if this.R0 > 0
         eR = (
             this.R0
             *(
                 exp(-this.beta*this.A*this.DGR/(this.kB*this.T))
-                *(bu[1]/(1-bu[1]))^(-this.beta*this.A)
+                *(u/(1-u))^(-this.beta*this.A)
                 *(this.pO)^(this.beta*this.A/2.0)
                 - 
                 exp((1.0-this.beta)*this.A*this.DGR/(this.kB*this.T))
-                *(bu[1]/(1-bu[1]))^((1.0-this.beta)*this.A)
+                *(u/(1-u))^((1.0-this.beta)*this.A)
                 *(this.pO)^(-(1.0-this.beta)*this.A/2.0)
             )
         )
@@ -187,29 +186,29 @@ function electroreaction(this::YSZParameters, bu)
 end
 
 # surface reaction + adsorption
-function breaction!(this::YSZParameters,node,f,bf,u,bu)
-    if  this.bregion==1
-        electroR=electroreaction(this,bu)
+function breaction!(f,u,node,this::YSZParameters)
+    if  node.region==1
+        electroR=electroreaction(this,u[ib])
         f[iy]= (
             this.mO*this.A0*
             (
                 - this.DGA/(this.kB*this.T) 
                 +    
-                log(u[iy]*(1-bu[1]))
+                log(u[iy]*(1-u[ib]))
                 - 
-                log(bu[1]*(1-u[iy]))
+                log(u[ib]*(1-u[iy]))
             )
         )
         # if bulk chem. pot. > surf. ch.p. then positive flux from bulk to surf
         # sign is negative bcs of the equation implementation
-        bf[1]= (
+        f[ib]= (
             - this.mO*electroR - this.mO*this.A0*
             (
                 - this.DGA/(this.kB*this.T) 
                 +    
-                log(u[iy]*(1-bu[1]))
+                log(u[iy]*(1-u[ib]))
                 - 
-                log(bu[1]*(1-u[iy]))
+                log(u[ib]*(1-u[iy]))
                 
             )
         )      
@@ -222,10 +221,10 @@ end
 
 
 
-function breaction2!(this::YSZParameters,f,bf,u,bu)
-  if  this.bregion==1
-      f[iy]=(u[iy]-bu[1])
-      bf[1]=(bu[1]-u[iy])
+function breaction2!(f,u,node,this::YSZParameters)
+  if  node.region==1
+      f[iy]=(u[iy]-u[ib])
+      f[ib]=(u[ib]-u[iy])
   else
       f[1]=0
       f[2]=0
@@ -315,11 +314,11 @@ function run_new(;test=false, print_bool=false, verbose=false ,pyplot=false, sav
     end
     #
     dx_start = 10^convert(Float64,dx_exp)
-    X=width*TwoPointFluxFVM.geomspace(0.0,1.0,dx_start,1e-1)
+    X=width*VoronoiFVM.geomspace(0.0,1.0,dx_start,1e-1)
     #println("X = ",X)
     
     #
-    geom=TwoPointFluxFVM.Graph(X)
+    grid=VoronoiFVM.Grid(X)
     #
     
     parameters=YSZParameters()
@@ -343,33 +342,39 @@ function run_new(;test=false, print_bool=false, verbose=false ,pyplot=false, sav
     
     # update the "computed" values in parameters
     parameters = YSZParameters_update(parameters)
-    
-    #
-    parameters.storage=storage!
-    parameters.flux=flux!
-    parameters.reaction=reaction!
-    parameters.breaction=breaction!
-    parameters.bstorage=bstorage!
+
+    physics=VoronoiFVM.Physics(
+        data=parameters,
+        num_species=3,
+        storage=storage!,
+        flux=flux!,
+        reaction=reaction!,
+        breaction=breaction!,
+        bstorage=bstorage!
+    )
     #
     if print_bool
         printfields(parameters)
     end
 
-    sys=TwoPointFluxFVM.System(geom,parameters)
+    sys=VoronoiFVM.SparseSystem(grid,physics)
+    enable_species!(sys,iphi,[1])
+    enable_species!(sys,iy,[1])
+    enable_boundary_species!(sys,ib,[1])
+
     #
     #sys.boundary_values[iphi,1]=1.0e-0
     sys.boundary_values[iphi,2]=0.0e-3
     #
-    sys.boundary_factors[iphi,1]=TwoPointFluxFVM.Dirichlet
-    sys.boundary_factors[iphi,2]=TwoPointFluxFVM.Dirichlet
+    sys.boundary_factors[iphi,1]=VoronoiFVM.Dirichlet
+    sys.boundary_factors[iphi,2]=VoronoiFVM.Dirichlet
     #
     sys.boundary_values[iy,2]=parameters.y0
-    sys.boundary_factors[iy,2]=TwoPointFluxFVM.Dirichlet
+    sys.boundary_factors[iy,2]=VoronoiFVM.Dirichlet
     #
     inival=unknowns(sys)
     inival.=0.0
     #
-    inival_bulk=bulk_unknowns(sys,inival)
     
     phi0 = equil_phi(parameters)
     if print_bool
@@ -383,14 +388,14 @@ function run_new(;test=false, print_bool=false, verbose=false ,pyplot=false, sav
     end
 
 
-    for inode=1:size(inival_bulk,2)
-        inival_bulk[iphi,inode]=0.0
-        inival_bulk[iy,inode]= parameters.y0
+    for inode=1:size(inival,2)
+        inival[iphi,inode]=0.0
+        inival[iy,inode]= parameters.y0
     end
-    inival_boundary = boundary_unknowns(sys,inival,1)
-    inival_boundary[1]= parameters.y0
+    inival[ib,1]=parameters.y0
+
     #
-    control=TwoPointFluxFVM.NewtonControl()
+    control=VoronoiFVM.NewtonControl()
     control.verbose=verbose
     control.tol_linear=1.0e-4
     control.tol_relative=1.0e-5
@@ -454,9 +459,11 @@ function run_new(;test=false, print_bool=false, verbose=false ,pyplot=false, sav
             println("phi_equilibrium = ",phi0)
             println("ramp ......")
         end
-        
+
+        U = unknowns(sys)
+        U0 = unknowns(sys)
         if test
-            U = inival
+            U .= inival
         end
         
         while state != "cv_is_off"
@@ -493,23 +500,21 @@ function run_new(;test=false, print_bool=false, verbose=false ,pyplot=false, sav
             
             # tstep to potential phi
             sys.boundary_values[iphi,1]=phi
-            U=solve(sys,inival,control=control,tstep=tstep)
+            solve!(U,inival,sys, control=control,tstep=tstep)
             Qb= - integrate(sys,reaction!,U) # \int n^F            
-            dphi_end = bulk_unknowns(sys,U)[iphi, end] - bulk_unknowns(sys,U)[iphi, end-1]
+            dphi_end = U[iphi, end] - U[iphi, end-1]
             dx_end = X[end] - X[end-1]
             dphiB=parameters.eps0*(1+parameters.chi)*(dphi_end/dx_end)
-            y_bound=boundary_unknowns(sys,U,1)
-            Qs= (parameters.e0/parameters.areaL)*parameters.zA*y_bound*parameters.ms_par*(1-parameters.nus) # (e0*zA*nA_s)
+            Qs= (parameters.e0/parameters.areaL)*parameters.zA*U[ib,1]*parameters.ms_par*(1-parameters.nus) # (e0*zA*nA_s)
 
                     
             # for faster computation, solving of "dtstep problem" is not performed
-            U0 = inival
+            U0 .= inival
             inival.=U
             Qb0 = - integrate(sys,reaction!,U0) # \int n^F
-            dphi0_end = bulk_unknowns(sys,U0)[iphi, end] - bulk_unknowns(sys,U0)[iphi, end-1]
+            dphi0_end = U0[iphi, end] - U0[iphi, end-1]
             dphiB0 = parameters.eps0*(1+parameters.chi)*(dphi0_end/dx_end)
-            y0_bound=boundary_unknowns(sys,U0,1)
-            Qs0 = (parameters.e0/parameters.areaL)*parameters.zA*y0_bound*parameters.ms_par*(1-parameters.nus) # (e0*zA*nA_s)
+            Qs0 = (parameters.e0/parameters.areaL)*parameters.zA*U0[ib,1]*parameters.ms_par*(1-parameters.nus) # (e0*zA*nA_s)
 
 
             
@@ -520,8 +525,8 @@ function run_new(;test=false, print_bool=false, verbose=false ,pyplot=false, sav
             
             
             # reaction average
-            reac = - 2*parameters.e0*electroreaction(parameters, y_bound)
-            reacd = - 2*parameters.e0*electroreaction(parameters, y0_bound)
+            reac = - 2*parameters.e0*electroreaction(parameters, U[ib,1])
+            reacd = - 2*parameters.e0*electroreaction(parameters,U0[ib,1])
             Ir= 0.5*(reac + reacd)
 
             #############################################################
@@ -535,14 +540,10 @@ function run_new(;test=false, print_bool=false, verbose=false ,pyplot=false, sav
             
             #@printf("t = %g     U = %g   state = %s  reac = %g  \n", istep*tstep, phi, state, Ir)
 
-            # extracting the computed data
-            U_bulk=bulk_unknowns(sys,U)
-            U_bound=boundary_unknowns(sys,U,1)
-            
             
             # storing data
-            append!(y0_range,U_bulk[iy,1])
-            append!(ys_range,U_bound[1,1])
+            append!(y0_range,U[iy,1])
+            append!(ys_range,U[ib,1])
             append!(phi_range,phi)
             #
             append!(Ib_range,Ib)
@@ -577,9 +578,9 @@ function run_new(;test=false, print_bool=false, verbose=false ,pyplot=false, sav
                 
                 if num_subplots > 0
                     subplot(num_subplots*100 + 11)
-                    plot((10^9)*X[:],U_bulk[iphi,:],label="phi (V)")
-                    plot((10^9)*X[:],U_bulk[iy,:],label="y")
-                    plot(0,U_bound[1,1],"go", markersize=ys_marker_size, label="y_s")
+                    plot((10^9)*X[:],U[iphi,:],label="phi (V)")
+                    plot((10^9)*X[:],U[iy,:],label="y")
+                    plot(0,U[ib,1],"go", markersize=ys_marker_size, label="y_s")
                     l_plot = 5.0
                     PyPlot.xlim(-0.01*l_plot, l_plot)
                     PyPlot.ylim(-0.5,1.1)
@@ -590,9 +591,9 @@ function run_new(;test=false, print_bool=false, verbose=false ,pyplot=false, sav
                 
                 if num_subplots > 1
                     subplot(num_subplots*100 + 12)
-                    plot((10^3)*X[:],U_bulk[iphi,:],label="phi (V)")
-                    plot((10^3)*X[:],U_bulk[iy,:],label="y")
-                    plot(0,U_bound[1,1],"go", markersize=ys_marker_size, label="y_s")
+                    plot((10^3)*X[:],U[iphi,:],label="phi (V)")
+                    plot((10^3)*X[:],U[iy,:],label="y")
+                    plot(0,U[ib,1],"go", markersize=ys_marker_size, label="y_s")
                     PyPlot.ylim(-0.5,1.1)
                     PyPlot.xlabel("x (mm)")
                     PyPlot.legend(loc="best")
