@@ -1,14 +1,17 @@
 module YSZNew
 
 using Printf
-using TwoPointFluxFVM
+using VoronoiFVM
 using PyPlot
 using DataFrames
 using CSV
 using LeastSquaresOptim
 
-mutable struct YSZParameters <:TwoPointFluxFVM.Physics
-    TwoPointFluxFVM.@AddPhysicsBaseClassFields
+
+
+
+
+mutable struct YSZParameters <: VoronoiFVM.AbstractData
 
     # to fit
     A0::Float64   # surface adsorption coefficient [ s^-1 ]
@@ -52,9 +55,6 @@ mutable struct YSZParameters <:TwoPointFluxFVM.Physics
 end
 
 function YSZParameters(this)
-    TwoPointFluxFVM.PhysicsBase(this,2)
-    this.num_bspecies=[ 1, 0]
-    
     
     this.e0   = 1.602176565e-19  #  [C]
     this.eps0 = 8.85418781762e-12 #  [As/(Vm)]
@@ -73,9 +73,10 @@ function YSZParameters(this)
     this.A=2.
     
     
-    #this.DD=1.5658146540360312e-11  # fitted to conductivity 0.063 S/cm ... TODO reference
+    #this.DD=1.5658146540360312e-11  # [m / s^2]fitted to conductivity 0.063 S/cm ... TODO reference
     #this.DD=8.5658146540360312e-10  # random value  <<<< GOOOD hand-guess
     this.DD=9.5658146540360312e-10  # some value  <<<< nearly the BEST hand-guess
+    #this.DD=9.5658146540360312e-11  # testing value
     this.pO=1.0                   # O2 atmosphere 
     this.T=1073                     
     this.nu=0.9                     # assumption
@@ -121,23 +122,26 @@ end
 
 const iphi=1
 const iy=2
+const ib=3
 
 # time derivatives
-function storage!(this::YSZParameters, f,u)
+function storage!(f,u, node, this::YSZParameters)
     f[iphi]=0
     f[iy]=this.mO*this.m_par*(1.0-this.nu)*u[iy]/this.vL
 end
 
-function bstorage!(this::YSZParameters,bf,bu)
-    if  this.bregion==1
-        bf[1]=this.mO*this.ms_par*(1.0-this.nus)*bu[1]/this.areaL
+function bstorage!(f,u,node, this::YSZParameters)
+    if  node.region==1
+        f[ib]=this.mO*this.ms_par*(1.0-this.nus)*u[ib]/this.areaL
     else
-        bf[1]=0
+        f[ib]=0
     end
 end
 
 # bulk flux
-function flux!(this::YSZParameters,f,uk,ul)
+function flux!(f,u, edge, this::YSZParameters)
+    uk=viewK(edge,u)
+    ul=viewL(edge,u)
     f[iphi]=this.eps0*(1+this.chi)*(uk[iphi]-ul[iphi])    
     
     bp,bm=fbernoulli_pm(
@@ -161,23 +165,23 @@ end
 
 
 # sources
-function reaction!(this::YSZParameters, f,u)
+function reaction!(f,u, node, this::YSZParameters)
     f[iphi]=-(this.e0/this.vL)*(this.zA*this.m_par*(1-this.nu)*u[iy] + this.zL) # source term for the Poisson equation, beware of the sign
     f[iy]=0
 end
 
 # surface reaction
-function electroreaction(this::YSZParameters, bu)
+function electroreaction(this::YSZParameters, u)
     if this.R0 > 0
         eR = (
             this.R0
             *(
                 exp(-this.beta*this.A*this.DGR/(this.kB*this.T))
-                *(bu[1]/(1-bu[1]))^(-this.beta*this.A)
+                *(u/(1-u))^(-this.beta*this.A)
                 *(this.pO)^(this.beta*this.A/2.0)
                 - 
                 exp((1.0-this.beta)*this.A*this.DGR/(this.kB*this.T))
-                *(bu[1]/(1-bu[1]))^((1.0-this.beta)*this.A)
+                *(u/(1-u))^((1.0-this.beta)*this.A)
                 *(this.pO)^(-(1.0-this.beta)*this.A/2.0)
             )
         )
@@ -187,29 +191,29 @@ function electroreaction(this::YSZParameters, bu)
 end
 
 # surface reaction + adsorption
-function breaction!(this::YSZParameters,f,bf,u,bu)
-    if  this.bregion==1
-        electroR=electroreaction(this,bu)
+function breaction!(f,u,node,this::YSZParameters)
+    if  node.region==1
+        electroR=electroreaction(this,u[ib])
         f[iy]= (
             this.mO*this.A0*
             (
                 - this.DGA/(this.kB*this.T) 
                 +    
-                log(u[iy]*(1-bu[1]))
+                log(u[iy]*(1-u[ib]))
                 - 
-                log(bu[1]*(1-u[iy]))
+                log(u[ib]*(1-u[iy]))
             )
         )
         # if bulk chem. pot. > surf. ch.p. then positive flux from bulk to surf
         # sign is negative bcs of the equation implementation
-        bf[1]= (
+        f[ib]= (
             - this.mO*electroR - this.mO*this.A0*
             (
                 - this.DGA/(this.kB*this.T) 
                 +    
-                log(u[iy]*(1-bu[1]))
+                log(u[iy]*(1-u[ib]))
                 - 
-                log(bu[1]*(1-u[iy]))
+                log(u[ib]*(1-u[iy]))
                 
             )
         )      
@@ -222,10 +226,10 @@ end
 
 
 
-function breaction2!(this::YSZParameters,f,bf,u,bu)
-  if  this.bregion==1
-      f[iy]=(u[iy]-bu[1])
-      bf[1]=(bu[1]-u[iy])
+function breaction2!(f,u,node,this::YSZParameters)
+  if  node.region==1
+      f[iy]=(u[iy]-u[ib])
+      f[ib]=(u[ib]-u[iy])
   else
       f[1]=0
       f[2]=0
@@ -295,12 +299,7 @@ end
 
 
 
-
-
-
-
-
-function run_new(;test=false, print_bool=false, verbose=false ,pyplot=false, save_files=false, width=10.0e-9,  dx_exp=-9, voltammetry=false, dlcap=false, voltrate=0.005, upp_bound=0.5, low_bound=-0.5, sample=40, prms_in=[21.71975544711280, 20.606423236896422, 0.0905748, -0.708014, 0.6074566741435283, 0.1], nu_in=0.9)
+function run_new(;test=false, print_bool=false, verbose=false ,pyplot=false, save_files=false, width=0.45e-3,  dx_exp=-9, voltammetry=false, EIS_TDS=false, EIS_IS=false, EIS_make_plots=false , dlcap=false, voltrate=0.001, upp_bound=0.55, low_bound=-0.548, sample=50, prms_in=[21.71975544711280, 20.606423236896422, 0.0905748, -0.708014, 0.6074566741435283, 0.1], nu_in=0.9)
 
     # prms_in = [ A0, R0, DGA, DGR, beta, A ]
 
@@ -313,13 +312,13 @@ function run_new(;test=false, print_bool=false, verbose=false ,pyplot=false, sav
             println("dlcap > area = 1")
         end
     end
-    #
+    #w
     dx_start = 10^convert(Float64,dx_exp)
-    X=width*TwoPointFluxFVM.geomspace(0.0,1.0,dx_start,1e-1)
+    X=width*VoronoiFVM.geomspace(0.0,1.0,dx_start,1e-1)
     #println("X = ",X)
     
     #
-    geom=TwoPointFluxFVM.Graph(X)
+    grid=VoronoiFVM.Grid(X)
     #
     
     parameters=YSZParameters()
@@ -343,33 +342,41 @@ function run_new(;test=false, print_bool=false, verbose=false ,pyplot=false, sav
     
     # update the "computed" values in parameters
     parameters = YSZParameters_update(parameters)
-    
-    #
-    parameters.storage=storage!
-    parameters.flux=flux!
-    parameters.reaction=reaction!
-    parameters.breaction=breaction!
-    parameters.bstorage=bstorage!
+
+    physics=VoronoiFVM.Physics(
+        data=parameters,
+        num_species=3,
+        storage=storage!,
+        flux=flux!,
+        reaction=reaction!,
+        breaction=breaction!,
+        bstorage=bstorage!
+    )
     #
     if print_bool
         printfields(parameters)
     end
 
-    sys=TwoPointFluxFVM.System(geom,parameters)
+    #sys=VoronoiFVM.SparseSystem(grid,physics)
+    sys=VoronoiFVM.DenseSystem(grid,physics)
+    enable_species!(sys,iphi,[1])
+    enable_species!(sys,iy,[1])
+    enable_boundary_species!(sys,ib,[1])
+
     #
-    #sys.boundary_values[iphi,1]=1.0e-0
+    sys.boundary_values[iphi,1]=0.0  
+    #sys.boundary_values[iphi,1]=0.374762
     sys.boundary_values[iphi,2]=0.0e-3
     #
-    sys.boundary_factors[iphi,1]=TwoPointFluxFVM.Dirichlet
-    sys.boundary_factors[iphi,2]=TwoPointFluxFVM.Dirichlet
+    sys.boundary_factors[iphi,1]=VoronoiFVM.Dirichlet
+    sys.boundary_factors[iphi,2]=VoronoiFVM.Dirichlet
     #
     sys.boundary_values[iy,2]=parameters.y0
-    sys.boundary_factors[iy,2]=TwoPointFluxFVM.Dirichlet
+    sys.boundary_factors[iy,2]=VoronoiFVM.Dirichlet
     #
     inival=unknowns(sys)
     inival.=0.0
     #
-    inival_bulk=bulk_unknowns(sys,inival)
     
     phi0 = equil_phi(parameters)
     if print_bool
@@ -383,14 +390,14 @@ function run_new(;test=false, print_bool=false, verbose=false ,pyplot=false, sav
     end
 
 
-    for inode=1:size(inival_bulk,2)
-        inival_bulk[iphi,inode]=0.0
-        inival_bulk[iy,inode]= parameters.y0
+    for inode=1:size(inival,2)
+        inival[iphi,inode]=0.0
+        inival[iy,inode]= parameters.y0
     end
-    inival_boundary = boundary_unknowns(sys,inival,1)
-    inival_boundary[1]= parameters.y0
+    inival[ib,1]=parameters.y0
+
     #
-    control=TwoPointFluxFVM.NewtonControl()
+    control=VoronoiFVM.NewtonControl()
     control.verbose=verbose
     control.tol_linear=1.0e-4
     control.tol_relative=1.0e-5
@@ -400,6 +407,275 @@ function run_new(;test=false, print_bool=false, verbose=false ,pyplot=false, sav
     control.damp_initial=1.0e-5
     control.damp_growth=1.9
     time=0.0
+ 
+ 
+    ###### code for performing the EIS ######
+    #########################################
+    #########################################
+    #########################################
+    #########################################
+    #########################################
+    
+        
+    # EIS - VoronoiFVM.ImpedanceSystem
+    if EIS_IS
+        U = unknowns(sys)
+        
+        phi_OCV = 0.0374762
+        
+        
+        # relaxation
+        sys.boundary_values[iphi,1]= phi_OCV
+        solve!(U,inival,sys, control=control)
+
+        
+        factory=VoronoiFVM.TestFunctionFactory(sys)
+        #tf0=testfunction(factory,[2],[1])
+        tfL=testfunction(factory,[1],[2])
+            
+        excited_spec=iphi
+        excited_bc=1
+        isys=VoronoiFVM.ImpedanceSystem(sys,U,excited_spec, excited_bc)
+        
+        w0 = 1.0e-6
+        w1 = 1.0e6
+        
+        w = w0
+        
+        UZ=unknowns(isys)
+        
+        allIL=zeros(Complex{Float64},0)
+        
+        while w<w1
+            solve!(UZ,isys,w)
+            
+            IL=integrate(isys,tfL,w,UZ)[1]
+            
+            push!(allIL,IL)
+            
+            # growth factor such that there are 10 points in every order of magnitude
+            # (which is consistent with "freq" list below)
+            w=w*1.25892
+        end
+        
+        PyPlot.clf()
+        PyPlot.grid()
+        plot(real(allIL),imag(allIL),label="calc")
+        PyPlot.legend(loc="upper left")
+        pause(1.0e-10)
+        #waitforbuttonpress()
+    end
+
+
+
+    #########################################
+    #########################################
+    #########################################
+    #########################################
+    #########################################
+    
+    # EIS - time-dependent simulation
+    if EIS_TDS
+        if print_bool
+            println("performing EIS time-dependent simulation ...")  
+        end
+                
+        freq = [1.0E-06 1.3E-06 1.6E-06 2.0E-06 2.5E-06 3.2E-06 4.0E-06 5.0E-06 6.3E-06 7.9E-06 1.0E-05 1.3E-05 1.6E-05 2.0E-05 2.5E-05 3.2E-05 4.0E-05 5.0E-05 6.3E-05 7.9E-05 1.0E-04 1.3E-04 1.6E-04 2.0E-04 2.5E-04 3.2E-04 4.0E-04 5.0E-04 6.3E-04 7.9E-04 1.0E-03 1.3E-03 1.6E-03 2.0E-03 2.5E-03 3.2E-03 4.0E-03 5.0E-03 6.3E-03 7.9E-03 1.0E-02 1.3E-02 1.6E-02 2.0E-02 2.5E-02 3.2E-02 4.0E-02 5.0E-02 6.3E-02 7.9E-02 1.0E-01 1.3E-01 1.6E-01 2.0E-01 2.5E-01 3.2E-01 4.0E-01 5.0E-01 6.3E-01 7.9E-01 1.0E+00 1.3E+00 1.6E+00 2.0E+00 2.5E+00 3.2E+00 4.0E+00 5.0E+00 6.3E+00 7.9E+00 1.0E+01 1.3E+01 1.6E+01 2.0E+01 2.5E+01 3.2E+01 4.0E+01 5.0E+01 6.3E+01 7.9E+01 1.0E+02 1.3E+02 1.6E+02 2.0E+02 2.5E+02 3.2E+02 4.0E+02 5.0E+02 6.3E+02 7.9E+02 1.0E+03 1.3E+03 1.6E+03 2.0E+03 2.5E+03 3.2E+03 4.0E+03 5.0E+03 6.3E+03 7.9E+03 1.0E+04 1.3E+04 1.6E+04 2.0E+04 2.5E+04 3.2E+04 4.0E+04 5.0E+04 6.3E+04 7.9E+04 1.0E+05 1.3E+05 1.6E+05 2.0E+05 2.5E+05 3.2E+05 4.0E+05 5.0E+05 6.3E+05 7.9E+05 1.0E+06]        
+        
+        #freq = freq[1:5]
+        
+        file_label = string("EIS-test")
+        out_dir = string("./results/EIS_aux_data/",file_label)
+        
+        for f in freq
+            ##############################################################################
+            ## Control panel #############################################################
+            
+            pp = 3 			# number of periods
+            pbp = 10      		# number of "time" points per 1 periode
+            t_eis_start = 1 /f	# nominator says after how many cycles the recording of EIS data starts
+            
+            phi_OCV = 0.0374762	# [V]	
+            
+            eis_amplitude = 0.005 	# [V]
+            
+            ##############################################################################
+            ##############################################################################
+            if print_bool
+                println("frequency ",f)
+            end
+            out_name=string(file_label, "_f", @sprintf("%.1e",f))
+        
+            istep=0
+
+
+            # inicializing storage lists
+            y0_range=zeros(0)
+            ys_range=zeros(0)
+            phi_range=zeros(0)
+            #
+            Is_range=zeros(0)
+            Ib_range=zeros(0)
+            Ibb_range=zeros(0)
+            Ir_range=zeros(0)
+            
+            time_range = zeros(0)  # [s]
+            
+            if save_files
+                out_df = DataFrame(U = Float64[], Itot = Float64[])
+            end
+            
+            U = unknowns(sys)
+            U0 = unknowns(sys)
+            
+            w = 2*pi*f
+            T_start = 0.0
+            tstep = 1/(f*pbp)
+            T_end = pp/f
+            
+            t = T_start
+                    
+
+            allt = zeros(0)
+            allphi = zeros(0)
+            allI = zeros(0)
+            
+            istep_eis_start = -1
+               
+            # relaxation
+            sys.boundary_values[iphi,1]=phi_OCV
+            solve!(U,inival,sys, control=control)
+        
+        
+            # eis
+            while t <= T_end
+                istep+= 1
+                t = t + tstep
+                #println(t)
+                if (t > t_eis_start) && (istep_eis_start < 0)
+                    istep_eis_start = istep
+                end
+                
+                phi = eis_amplitude*sin(w*t) + phi_OCV
+                
+                push!(allt,t)
+                push!(allphi,phi)
+                #println(phi)
+                #println(X)
+                
+                
+                sys.boundary_values[iphi,1]=phi
+                
+                #println("bound ",sys.boundary_values[iphi,1]," inival ",inival)
+                
+                solve!(U,inival,sys, control=control,tstep=tstep)
+                Qb= - integrate(sys,reaction!,U) # \int n^F            
+                dphi_end = U[iphi, end] - U[iphi, end-1]
+                dx_end = X[end] - X[end-1]
+                dphiB=parameters.eps0*(1+parameters.chi)*(dphi_end/dx_end)
+                Qs= (parameters.e0/parameters.areaL)*parameters.zA*U[ib,1]*parameters.ms_par*(1-parameters.nus) # (e0*zA*nA_s)
+
+                        
+                # for faster computation, solving of "dtstep problem" is not performed
+                U0 .= inival
+                inival.=U
+                Qb0 = - integrate(sys,reaction!,U0) # \int n^F
+                dphi0_end = U0[iphi, end] - U0[iphi, end-1]
+                dphiB0 = parameters.eps0*(1+parameters.chi)*(dphi0_end/dx_end)
+                Qs0 = (parameters.e0/parameters.areaL)*parameters.zA*U0[ib,1]*parameters.ms_par*(1-parameters.nus) # (e0*zA*nA_s)
+
+
+                
+                # time derivatives
+                Is  = - (Qs[1] - Qs0[1])/tstep                
+                Ib  = - (Qb[iphi] - Qb0[iphi])/tstep 
+                Ibb = - (dphiB - dphiB0)/tstep
+                
+                
+                # reaction average
+                reac = - 2*parameters.e0*electroreaction(parameters, U[ib,1])
+                reacd = - 2*parameters.e0*electroreaction(parameters,U0[ib,1])
+                Ir= 0.5*(reac + reacd)
+
+                #############################################################
+                #multiplication by area of electrode I = A * ( ... )
+                #Ibb = Ibb*AreaEllyt
+                #Ib = Ib*AreaEllyt
+                #Is = Is*AreaEllyt
+                #Ir = Ir*AreaEllyt
+                #
+                
+                # storing data
+                append!(y0_range,U[iy,1])
+                append!(ys_range,U[ib,1])
+                append!(phi_range,phi)
+                #
+                append!(Ib_range,Ib)
+                append!(Is_range,Is)
+                append!(Ibb_range,Ibb)
+                append!(Ir_range, Ir)
+                #
+                append!(time_range,tstep*istep)
+                
+                if save_files && (istep_eis_start > -1 )
+                    if dlcap
+                        push!(out_df,[phi-phi_OCV(Ib+Is+Ir)/voltrate    ])
+                    else
+                        push!(out_df,[phi-phi_OCV    Ib+Is+Ir   ])
+                    end
+                end
+
+                
+                        
+                if (istep_eis_start > -1) && (pyplot)
+                    
+                    clf()
+                    subplot(211)
+                    plot(time_range[istep_eis_start:end],allphi[istep_eis_start:end])
+                    subplot(212)
+                    plot(time_range[istep_eis_start:end],(Ib_range + Is_range + Ibb_range + Ir_range)[istep_eis_start:end])
+                    pause(1.0e-10)
+                    #println(" -- ")
+                end
+
+            end
+            
+            if save_files                
+                #println(out_dir)
+                if !ispath(out_dir)
+                    mkpath(out_dir)
+                end
+                
+                CSV.write(string(out_dir,"/",out_name,".csv"),out_df)
+                #if pyplot
+                #    PyPlot.savefig(string("./images/",out_name,".png"))
+                #end
+            end
+        end
+        if EIS_make_plots
+            run(`python _1D-BODE.py $file_label`)
+        end
+    end
+
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    #########################################
+    #########################################
+    #########################################
+    #########################################
+    #########################################
+    #########################################
+    #########################################
+    #########################################
+    #########################################
+    #########################################
     
     # code for performing the CV
     if voltammetry
@@ -454,9 +730,11 @@ function run_new(;test=false, print_bool=false, verbose=false ,pyplot=false, sav
             println("phi_equilibrium = ",phi0)
             println("ramp ......")
         end
-        
+
+        U = unknowns(sys)
+        U0 = unknowns(sys)
         if test
-            U = inival
+            U .= inival
         end
         
         while state != "cv_is_off"
@@ -493,23 +771,21 @@ function run_new(;test=false, print_bool=false, verbose=false ,pyplot=false, sav
             
             # tstep to potential phi
             sys.boundary_values[iphi,1]=phi
-            U=solve(sys,inival,control=control,tstep=tstep)
+            solve!(U,inival,sys, control=control,tstep=tstep)
             Qb= - integrate(sys,reaction!,U) # \int n^F            
-            dphi_end = bulk_unknowns(sys,U)[iphi, end] - bulk_unknowns(sys,U)[iphi, end-1]
+            dphi_end = U[iphi, end] - U[iphi, end-1]
             dx_end = X[end] - X[end-1]
             dphiB=parameters.eps0*(1+parameters.chi)*(dphi_end/dx_end)
-            y_bound=boundary_unknowns(sys,U,1)
-            Qs= (parameters.e0/parameters.areaL)*parameters.zA*y_bound*parameters.ms_par*(1-parameters.nus) # (e0*zA*nA_s)
+            Qs= (parameters.e0/parameters.areaL)*parameters.zA*U[ib,1]*parameters.ms_par*(1-parameters.nus) # (e0*zA*nA_s)
 
                     
             # for faster computation, solving of "dtstep problem" is not performed
-            U0 = inival
+            U0 .= inival
             inival.=U
             Qb0 = - integrate(sys,reaction!,U0) # \int n^F
-            dphi0_end = bulk_unknowns(sys,U0)[iphi, end] - bulk_unknowns(sys,U0)[iphi, end-1]
+            dphi0_end = U0[iphi, end] - U0[iphi, end-1]
             dphiB0 = parameters.eps0*(1+parameters.chi)*(dphi0_end/dx_end)
-            y0_bound=boundary_unknowns(sys,U0,1)
-            Qs0 = (parameters.e0/parameters.areaL)*parameters.zA*y0_bound*parameters.ms_par*(1-parameters.nus) # (e0*zA*nA_s)
+            Qs0 = (parameters.e0/parameters.areaL)*parameters.zA*U0[ib,1]*parameters.ms_par*(1-parameters.nus) # (e0*zA*nA_s)
 
 
             
@@ -520,8 +796,8 @@ function run_new(;test=false, print_bool=false, verbose=false ,pyplot=false, sav
             
             
             # reaction average
-            reac = - 2*parameters.e0*electroreaction(parameters, y_bound)
-            reacd = - 2*parameters.e0*electroreaction(parameters, y0_bound)
+            reac = - 2*parameters.e0*electroreaction(parameters, U[ib,1])
+            reacd = - 2*parameters.e0*electroreaction(parameters,U0[ib,1])
             Ir= 0.5*(reac + reacd)
 
             #############################################################
@@ -535,14 +811,10 @@ function run_new(;test=false, print_bool=false, verbose=false ,pyplot=false, sav
             
             #@printf("t = %g     U = %g   state = %s  reac = %g  \n", istep*tstep, phi, state, Ir)
 
-            # extracting the computed data
-            U_bulk=bulk_unknowns(sys,U)
-            U_bound=boundary_unknowns(sys,U,1)
-            
             
             # storing data
-            append!(y0_range,U_bulk[iy,1])
-            append!(ys_range,U_bound[1,1])
+            append!(y0_range,U[iy,1])
+            append!(ys_range,U[ib,1])
             append!(phi_range,phi)
             #
             append!(Ib_range,Ib)
@@ -552,8 +824,8 @@ function run_new(;test=false, print_bool=false, verbose=false ,pyplot=false, sav
             #
             append!(time_range,tstep*istep)
             
-            if save_files
-                if state=="cv_is_on"
+            if state=="cv_is_on"
+                if save_files
                     if dlcap
                         push!(out_df,[(istep-istep_cv_start)*tstep   phi-phi0    (Ib+Is+Ir)/voltrate    Ib/voltrate    Is/voltrate    Ir/voltrate])
                     else
@@ -577,9 +849,9 @@ function run_new(;test=false, print_bool=false, verbose=false ,pyplot=false, sav
                 
                 if num_subplots > 0
                     subplot(num_subplots*100 + 11)
-                    plot((10^9)*X[:],U_bulk[iphi,:],label="phi (V)")
-                    plot((10^9)*X[:],U_bulk[iy,:],label="y")
-                    plot(0,U_bound[1,1],"go", markersize=ys_marker_size, label="y_s")
+                    plot((10^9)*X[:],U[iphi,:],label="phi (V)")
+                    plot((10^9)*X[:],U[iy,:],label="y")
+                    plot(0,U[ib,1],"go", markersize=ys_marker_size, label="y_s")
                     l_plot = 5.0
                     PyPlot.xlim(-0.01*l_plot, l_plot)
                     PyPlot.ylim(-0.5,1.1)
@@ -588,17 +860,27 @@ function run_new(;test=false, print_bool=false, verbose=false ,pyplot=false, sav
                     PyPlot.grid()
                 end
                 
-                if num_subplots > 1
+                #if num_subplots > 1
+                #    subplot(num_subplots*100 + 12)
+                #    plot((10^3)*X[:],U[iphi,:],label="phi (V)")
+                #    plot((10^3)*X[:],U[iy,:],label="y")
+                #    plot(0,U[ib,1],"go", markersize=ys_marker_size, #label="y_s")
+                #    PyPlot.ylim(-0.5,1.1)
+                #    PyPlot.xlabel("x (mm)")
+                #    PyPlot.legend(loc="best")
+                #    PyPlot.grid()
+                #end
+                
+                if (num_subplots > 1) && (istep_cv_start > -1)
+                    cv_range = (istep_cv_start+1):length(phi_range)
                     subplot(num_subplots*100 + 12)
-                    plot((10^3)*X[:],U_bulk[iphi,:],label="phi (V)")
-                    plot((10^3)*X[:],U_bulk[iy,:],label="y")
-                    plot(0,U_bound[1,1],"go", markersize=ys_marker_size, label="y_s")
-                    PyPlot.ylim(-0.5,1.1)
-                    PyPlot.xlabel("x (mm)")
+                    plot(phi_range[cv_range].-phi0, ((Is_range + Ib_range + Ir_range + Ibb_range)[cv_range]) ,label="total current")
+                    
+                    PyPlot.xlabel(L"\eta \ (V)")
+                    PyPlot.ylabel(L"I \ (A)")
                     PyPlot.legend(loc="best")
                     PyPlot.grid()
                 end
-                
                 
                 if num_subplots > 2
                     subplot(num_subplots*100 + 13)
@@ -754,10 +1036,23 @@ function run_new(;test=false, print_bool=false, verbose=false ,pyplot=false, sav
             "_vrate",@sprintf("%.2g",voltrate),
             )
 
+            out_data_dir = "./results/CV_data/"
+            
+            if !ispath(out_data_dir)
+                mkpath(out_data_dir)
+            end
 
-            CSV.write(string("./data/",out_name,".csv"),out_df)
+            CSV.write(string(out_data_dir, out_name,".csv"),out_df)
+            
+            
             if pyplot
-                PyPlot.savefig(string("./images/",out_name,".png"))
+                out_fig_dir = "./results/CV_images/"
+            
+                if !ispath(out_fig_dir)
+                    mkpath(out_fig_dir)
+                end
+            
+                PyPlot.savefig(string(out_fig_dir, out_name,".png"))
             end
         end
         if test
