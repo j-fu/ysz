@@ -1,0 +1,255 @@
+\documentclass[10pt]{amsart}
+\usepackage[a4paper]{geometry}
+\usepackage{float}
+
+
+
+
+\title{Small signal analysis for nonlinear evolution equations\\ Draft.}
+\author{J. Fuhrmann}
+\newcommand{\CV}{{\mathcal{V}}}
+\newcommand{\VV}{\mathbb{V}}
+\newcommand{\PP}{\mathbb{P}}
+\newcommand{\TT}{\mathbb{T}}
+\newcommand{\MM}{\mathbb{M}}
+\newtheorem{example}{Example}
+
+\begin{document}
+\maketitle
+%\begin{multicols}{2}
+\section{Frequency response of an electrical network}
+  
+The  current  dependency  on   voltage  of  basic  basic  elements  of
+electrical networks  can be subsummed  using the notion  of impedance.
+Let $U$ be  a given voltage difference applied to  the device, and $I$
+be the resulting current.  When  calculating the current response to a
+periodic  voltage  perturbations, calculations  can  be simplified  by
+switching  to  complex numbers.   So  we  assume  an applied  periodic
+voltage $U(t)=U_a\exp(i\omega  t)$ with amplitude  $U_a$ and frequency
+$\omega$, we get 
+
+\begin{table}[H]
+  \begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{lllll}
+Circuit Element     & Law     & Standard form & Complex Form & Impedance\\ 
+Resistance  & Ohm     & $ I(t)=\frac1R U(t)$                                & $I(t)=\frac1R U(t)$       &  $Z(\omega)=R$ \\
+Capacity    & Faraday & $ I(t)=C(t)\frac{d}{dt}U(t)$                        & $I(t)=Ci\omega U(t)$&          $Z(\omega)=\frac1{Ci\omega}$\\
+Inductivity & Henry   & $ I(t)=I_0+\frac1L\int\limits_{t_0}^tU(\tau) d\tau$ & $I(t)=\frac1{Li\omega}$ U(t)&$Z(\omega)=Li\omega$ \\
+\end{tabular}
+\caption{\label{tab:impedance} Impedance of three basic elements of electric circuits}\hfill
+\end{center}
+\end{table}
+
+Any  network consisting  of  these  elements can  be  analyzed in  the
+complex domain  using Kirchoffs law  and regarding the impedance  as a
+complex resistance.
+
+\section{Impedance spectroscopy in nonlinear evolution equations}
+
+Usually, the interpretations of impedance spectroscopy measurements of
+other  systems,  e.g. electrochemical  systems  is  performed using  a
+replacement  circuit consisting of  electrical elements.   Being quite
+successful in many cases,  this interpretation basically is limited to
+compartment type models.
+
+Here,  we discuss an  approach of  applying impedance  spectroscopy to
+abstract evolution equations.
+
+For a  given time  interval $\TT=[0,T]$, a  Banach space  $\CV$ called
+{\em state space},  and a finite dimensional space  $\PP$, called {\em
+parameter  space},  regard  the  abstract doubly  nonlinear  evolution
+equation
+\begin{equation}\label{eq:abstrevol}
+ \frac{d S(v(t),\lambda)}{dt} + D(v(t),\lambda)=0
+\end{equation}
+
+The state of  the system is {\em measured} by  some functional $M: \CV
+\rightarrow  \MM$,   where  $\MM$  is  the   finite  dimensional  {\em
+measurement space}.
+
+As an example, $\CV$ may  be a finite dimensional space containing the
+solution of some discretized system of partial differential equations.
+
+
+Given   a  steady   state,  $(v_0,   \lambda_0)$  such   that  $D(v_0,
+\lambda_0)=0$, measured  by $M_0=M(v_0)$, we  would like to  trace its
+response  to  a small,  periodic  perturbation $\lambda(t)=  \lambda_a
+\exp(i\omega  t)   $.   Expressing   this  response  as   $M(t)=  M_0+
+M_a(\omega)  \exp(i\omega  t)$,  we  yield the  impedance  $Z(\omega)=
+M_a(\omega)^{-1} \lambda_a$.
+
+
+
+In order to calculate the frequency response, we make the ansatz $v(t)=v_0+v_a\exp(i\omega  t)$ for
+the perturbation of the state variable and calculate the first order Taylor expansions
+the terms $S,D,R$:
+\begin{equation*}
+  \begin{split}
+    S(v_0+v_a\exp(i\omega  t),\lambda_0+\lambda_a\exp(i\omega  t))\approx&S(v_0,\lambda_0)+ 
+          S_v(v_0,\lambda_0)v_a\exp(i\omega  t)+
+          S_\lambda(v_0,\lambda_0)\lambda_a\exp(i\omega  t)\\
+    D(v_0+v_a\exp(i\omega  t),\lambda_0+\lambda_a\exp(i\omega  t))\approx&D(v_0,\lambda_0)+ 
+          D_v(v_0,\lambda_0)v_a\exp(i\omega  t)+
+          D_\lambda(v_0,\lambda_0)\lambda_a\exp(i\omega  t)\\
+    M(v_0+v_a\exp(i\omega  t))\approx&M(v_0)+ 
+          M_v(v_0)v_a\exp(i\omega  t)
+  \end{split}
+\end{equation*}
+
+Putting them into equation \eqref{eq:abstrevol}  and using the steady state condition yields
+\begin{equation*}
+  \begin{split}
+    \frac{d}{dt}\left( 
+      S_v(v_0,\lambda_0)v_a\exp(i\omega  t)+
+      S_\lambda(v_0,\lambda_0)\lambda_a\exp(i\omega  t)\right)+ 
+    D_v(v_0,\lambda_0)v_a\exp(i\omega  t)+
+    D_\lambda(v_0,\lambda_0)\lambda_a\exp(i\omega  t)&=0\\
+    i\omega\left( 
+      S_v(v_0,\lambda_0)v_a\exp(i\omega  t)+
+      S_\lambda(v_0,\lambda_0)\lambda_a\exp(i\omega  t)\right)+ 
+    D_v(v_0,\lambda_0)v_a\exp(i\omega  t)+
+    D_\lambda(v_0,\lambda_0)\lambda_a\exp(i\omega  t)&=0\\
+    i\omega\left( 
+      S_v(v_0,\lambda_0)v_a+
+      S_\lambda(v_0,\lambda_0)\lambda_a\right)+ 
+    D_v(v_0,\lambda_0)v_a+
+    D_\lambda(v_0,\lambda_0)\lambda_a&=0
+  \end{split}
+\end{equation*}
+
+Assuming $\dim \MM =\dim \PP=1$ and dividing by $\lambda_a$, we arrive at solving 
+\begin{equation*}
+    i\omega\left( 
+      S_v(v_0,\lambda_0)v_a+
+      S_\lambda(v_0,\lambda_0)\right)+ 
+    D_v(v_0,\lambda_0)v_a+
+    D_\lambda(v_0,\lambda_0)=0
+\end{equation*}
+for given $\omega$ with the unknown $v_a$.
+The impedance then can be calculated as 
+\begin{equation*}
+  Z(\omega)= \frac1{M_v(v_0)v_a}
+\end{equation*}
+
+
+The first example is a formal derivation of the use of Dirichlet boundary conditions.
+\begin{example}{Dirichlet Boundary Conditions}\\
+  Let $D(v,\lambda)= D_i(v)
+  +\frac1\epsilon\delta_{\Gamma_0}(v)
+  +\frac1\epsilon\delta_{\Gamma_1}(v-\lambda)$. This covers the case of an applie
+  voltage.
+Then  
+\begin{equation*}
+  \begin{split}
+    D_v(v,\lambda)= D_{i,v}(v)+ \frac1\epsilon\delta_{\Gamma_0}+ \frac1\epsilon\delta_{\Gamma_1}\\
+    D_\lambda(v,\lambda)= -\frac1\epsilon\delta_{\Gamma_1}\\
+   \end{split}
+\end{equation*}
+Therefore we have to solve 
+\begin{equation*}
+  i\omega S_v v_a + D_{i,v} v_a ++\frac1\epsilon\delta_{\Gamma_0}v_a +\frac1\epsilon\delta_{\Gamma_1}(v_a-1) =0
+\end{equation*}
+which corresponds to the Dirichlet problem  for the linearized equation 
+with boundary condition 1 on $\Gamma$.
+In order to implement these boundary conditions, we use penalty methods, and therefore, we can carry
+over this approach to the discrete case.
+\end{example}
+
+The next two examples can be taken for benchmarking numerical methods.
+\begin{example}{Current Response}
+  We calculate the impedance of the current response at $L$ to voltage change in $0$ of the linear reaction  diffusion system in $(0,L)$  
+  \begin{equation*}
+    \begin{cases}
+      Cu_t - (Du_x)_x + Ru=&0\\
+      u(0,t)=&\lambda\\
+      u(L,t)=&0\\
+    \end{cases}
+  \end{equation*}
+    As response functions we take the currents  $I_0=Du_x(0,t)$ and $I_L=Du_x(L,t)$.
+    The corresponding impedance equation is
+    \begin{equation*}
+      \begin{cases}
+        Ci\omega v - (Dv_x)_x +Rv =&0\\
+        v(0,t)=&1\\
+        v(L,t)=&0.\\
+      \end{cases}
+    \end{equation*}
+Setting $z=\sqrt{i\omega\frac{C}{D}+\frac{R}{D}}$, for the solution, we make the ansatz
+\begin{equation*}
+  v=ae^{zx}+be^{-zx}
+\end{equation*}
+which fulfills the differential equation.
+Setting $e^+=e^{zL},e^-=e^{-zL}$, from the boundary 
+conditons we get the system
+\begin{equation*}
+  \begin{cases}
+    a+b&=1\\
+    ae^++be^-&=0\\
+  \end{cases}
+\end{equation*}
+with the solutions $a=\frac{e^-}{e^--e^+},b=\frac{e^+}{e^+-e^-}$
+Therefore, we have
+\begin{equation*}
+  Dv_x(0)=Dz(a-b)=Dz\frac{e^-+e^+}{e^--e^+}
+\end{equation*}
+and
+\begin{equation*}
+  Dv_x(L)=Dz(ae^+-be^-)=Dz\frac{e^-e^++e^+e^-}{e^--e^+}=\frac{2Dz}{e^--e^+}
+\end{equation*}
+\end{example}
+
+
+\begin{example}{Voltage response}
+Regard the system
+  \begin{equation*}
+    \begin{cases}
+      Cu_t - (Du_x)_x + Ru=&0\\
+      u(0,t)=&\lambda\\
+      (Du_x)(L,t)=&0\\
+    \end{cases}
+  \end{equation*}
+  and observe the values $u(L)$ and $Du_x(0)$.
+The same ansatz as in the previous example leads to 
+\begin{equation*}
+  \begin{cases}
+    a+b&=1\\
+    izae^+-izbe^-&=0\\
+  \end{cases}
+\end{equation*}
+with the solutions $a=\frac{e^-}{e^++e^-}$ and $b=\frac{e^+}{e^++e^-}$
+Therefore,  $Du_x(0)=iDz\frac{e^--e^+}{e^++e^-}$ and
+$u(L)=\frac2{e^++e^-}$.
+\end{example}
+
+
+
+
+Algorithmically, we proceed as follows:
+\begin{quotation}
+\parindent0pt
+Given $\lambda$, solve steady state equation $D(v,\lambda)=0$\\
+Obtain Jacobi matrix for stationary problem \\% A
+Obtain Jacobi matrix of time derivative\\ % bprime
+
+Prepare solution+rhs with boundary conditions\\
+for $\omega=\omega_0\dots\omega_1$ do\\
+.~~~~ Setup complex matrix\\
+.~~~~ Solve complex system, take old solution as initial value\\
+.~~~~ calculate functional\\
+\end{quotation}
+
+If the functional is linear, e.g. a boundary flux calculated by a test function, it is sufficient to
+use the complex version of the already existing linear code.
+
+\end{document}
+
+
+
+
+
+
+
+
+
+
