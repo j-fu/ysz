@@ -264,6 +264,7 @@ function main(;nref=0, # spatial refinement
         push!(all_freqdomain,z_freqdomain)
 
         # Calculate exact solution (valid only in linear case!)
+        iω=1im*ω
         z=sqrt(iω*C/D+R/D);
         eplus=exp(z*L);
         eminus=exp(-z*L);
