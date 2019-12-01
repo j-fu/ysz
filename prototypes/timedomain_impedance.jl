@@ -29,7 +29,7 @@ function timedomain_impedance(sys, # time domain system
     # obtaine measurement of steady state
     # mstdy_steadystate=integrate(sys,measurement_testfunc,steadystate)[1]
     mstdy_steadystate=[0.0]
-    meas_stdy(mstdy_steadystate,vec(steadystate))
+    meas_stdy(mstdy_steadystate,values(steadystate))
     
     # solution arrays for time steping
     Uold=copy(steadystate)
@@ -72,11 +72,11 @@ function timedomain_impedance(sys, # time domain system
         # Obtain measurement
         # measured_val=(integrate(sys,measurement_testfunc,U, Uold,tstep)[1]-mstdy_steadystate)/excitation_amplitude
         mstdy_U=[0.0]
-        meas_stdy(mstdy_U,vec(U))
+        meas_stdy(mstdy_U,values(U))
         mtran_U=[0.0]
-        meas_tran(mtran_U,vec(U))
+        meas_tran(mtran_U,values(U))
         mtran_Uold=[0.0]
-        meas_tran(mtran_Uold,vec(Uold))
+        meas_tran(mtran_Uold,values(Uold))
         
         measured_val=(mstdy_U[1] + (mtran_U[1]-mtran_Uold[1])/tstep-mstdy_steadystate[1])/excitation_amplitude
         
@@ -151,7 +151,6 @@ function timedomain_impedance(sys, # time domain system
         gui(p)
     end
     z=settled_amplitude*exp(1im*phase_shift)
-    @show z
     return z
 end
 

@@ -1,10 +1,7 @@
 module ImpedanceExample2
 
-using LsqFit
 using Printf
 using VoronoiFVM
-using SparseDiffTools
-using SparseArrays,SparsityDetection
 
 if installed("Plots")
     using Plots
@@ -240,8 +237,11 @@ function main(;nref=0, # spatial refinement
         p=plot(p1,p2,p3,layout=(3,1),size=(600,800))
         gui(p)
     end
+   return all_freqdomain[end]
 end
-
+function test()
+    main()≈2.533912747815139 + 0.0017950992333295279im
+end
 
 end
 

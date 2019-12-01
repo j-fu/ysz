@@ -2,6 +2,12 @@ using Test
 
 @time begin
     @time begin
+        include("./prototypes/ImpedanceExample.jl")
+        @test ImpedanceExample.test()
+    end
+
+#= Old tests
+    @time begin
         print("including ysz_experiments:")
         include("../examples/ysz_experiments.jl")
     end
@@ -37,4 +43,5 @@ using Test
     end
     
     print("          all:")
+    =#
 end
