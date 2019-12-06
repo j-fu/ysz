@@ -126,7 +126,7 @@ end
 
 
 # time derivatives
-function storage!(f,u, node, this::YSZParameters)
+function storage!(f,u, node, this)
     f[iphi]=0
     f[iy]=this.mO*this.m_par*(1.0-this.nu)*u[iy]/this.vL
 end
@@ -140,7 +140,7 @@ function bstorage!(f,u,node, this::YSZParameters)
 end
 
 # bulk flux
-function flux!(f,u, edge, this::YSZParameters)
+function flux!(f,u, edge, this)
     uk=viewK(edge,u)
     ul=viewL(edge,u)
     f[iphi]=this.eps0*(1+this.chi)*(uk[iphi]-ul[iphi])    
@@ -166,7 +166,7 @@ end
 
 
 # sources
-function reaction!(f,u, node, this::YSZParameters)
+function reaction!(f,u, node, this)
     f[iphi]=-(this.e0/this.vL)*(this.zA*this.m_par*(1-this.nu)*u[iy] + this.zL) # source term for the Poisson equation, beware of the sign
     f[iy]=0
 end
