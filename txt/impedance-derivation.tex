@@ -300,7 +300,19 @@ Therefore,  $Du_x(0)=iDz\frac{e^--e^+}{e^++e^-}$ and
 $u(L)=\frac2{e^++e^-}$.
 \end{example}
 
-
+\begin{example}{PNP of a weak solution}
+Regard the system
+  \begin{align*}
+    \begin{cases}
+      \varphi_{xx} =& u - E\\
+      Cu_t - (Du_x)_x + Ru=&0\\
+      \varphi(0,t)=&\lambda\\
+      \varphi(L,t)=&0\\
+      u(L,t)=&E\\
+    \end{cases}
+  \end{align*}
+  and observe the values of $\frac{\mathrm{d}}{\mathrm{d}t} \int_0^L( u - E \mathrm{d}x)$.
+\end{example}
 
 
 Algorithmically, we proceed as follows:
@@ -320,7 +332,68 @@ for $\omega=\omega_0\dots\omega_1$ do\\
 
 If the functional is linear, e.g. a boundary flux calculated by a test function, it is sufficient to
 use the complex version of the already existing linear code.
+ 
+\subsection{Relation to the Fourier transform}
+The frequency system~\eqref{eq:impedsolve} derived above is a Fourier transform of the linearization of the time dependent problem.
 
+Consider again the system~\eqref{eq:abstrevol} perturbed by $\lambda = \lambda_0 + \lambda_a \Exp{i\omega t}$ in the steady state $(v_0,\lambda_0)$.
+A linear response of the solution is expected, therefore we make the ansatz $v(t) = v_0 + V_a(t)$.
+The parts of the system can be linearized w.r.t.\ the steady state as follows,
+\begin{subequations}
+\begin{align}
+    \frac{\mathrm{d}}{\mathrm{d}t}S(v_0+V_a(t),\lambda_0+\lambda_a\Exp{i\omega  t})
+    \approx&
+    \frac{\mathrm{d}}{\mathrm{d}t}\left[S_v(v_0,\lambda_0)V_a(t)+
+    S_\lambda(v_0,\lambda_0)\lambda_a\Exp{i\omega  t}\right]\\
+    D(v_0+V_a(t),\lambda_0+\lambda_a\Exp{i\omega  t})\approx& 
+    D_v(v_0,\lambda_0)V_a(t)+
+    D_\lambda(v_0,\lambda_0)\lambda_a\Exp{i\omega  t}~.
+\end{align}
+\label{eq:prelaplace}
+\end{subequations}
+Now the Fourier transform, i.e.\ $\mathcal{F}\{\bullet\}(\bar\omega) = \int_{-\infty}^\infty \Exp{-\bar\omega t} \bullet \mathrm{d}t$, is applied to the linearized system~\eqref{eq:prelaplace} and yields
+\begin{subequations}
+\begin{align}
+    \mathcal{F}\left\{
+        \frac{\mathrm{d}}{\mathrm{d}t}   S(v_0+V_a(t),\lambda_0+\lambda_a\Exp{i\omega  t}) 
+    \right\}(\bar\omega)
+    \approx&
+    %
+    i\bar\omega\left[
+     S_v(v_0,\lambda_0)v_a(\bar\omega)
+     +S_\lambda(v_0,\lambda_0)\lambda_a\delta(\bar\omega-\omega)
+    \right]\\
+    %
+    %
+    %
+    \mathcal{F}\left\{
+      D(v_0+V_a(t),\lambda_0+\lambda_a\Exp{i\omega  t})
+    %
+    \right\}(\bar\omega)
+    \approx&
+    %
+    D_v(v_0,\lambda_0)v_a(\bar\omega)+
+    D_\lambda(v_0,\lambda_0)\lambda_a\delta(\bar\omega-\omega)~.
+\end{align}
+\label{eq:fourier_linear}
+\end{subequations}
+Here $\mathcal{F} \{V_a\} = v_a$.
+Usually,  $S_\lambda(v_0,\lambda_0)=0$, then the Fourier transform of the linearized system reads
+\begin{align}
+    i\bar\omega S_v(v_0,\lambda_0)v_a(\bar\omega)+
+    D_v(v_0,\lambda_0)v_a(\bar\omega)+
+    D_\lambda(v_0,\lambda_0)\lambda_a\delta(\bar\omega-\omega)=0~.
+\end{align}
+For a frequency different from the excitation frequency, i.e.\ $\bar\omega\neq\omega$, only a vanishing response can solve the system in general, $V(\bar\omega)=0$.
+
+For $\bar\omega = \omega$, the value $v(\omega)$ is sought for, so that 
+\begin{align}
+    \left(
+        i\omega S_v(v_0,\lambda_0)+ D_v(v_0,\lambda_0)
+    \right)V_a(\omega)+
+    D_\lambda(v_0,\lambda_0)\lambda_a=0~,
+\end{align}
+holds. The last equation is equivalent to Eqn.~\eqref{eq:impedsolve}.
 \end{document}
 
 
